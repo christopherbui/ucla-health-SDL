@@ -22,6 +22,7 @@ colnames(ff_1)
 dim(ff_1)
 # ------------------------------------------------
 
+
 # construct SingelCellExperiment object
 sce <- prepData(raw_data)
 dim(sce)
@@ -32,3 +33,22 @@ table(sce$sample_id)
 # view non-isotope features
 names(int_colData(sce))
 
+# NORMALIZATION ----------------------------------------
+sce <- prepData(raw_data)
+
+# apply normalization; keep raw data
+res <- normCytof(sce, beads="dvs", k=50, assays=c("counts", "exprs"), overwrite=FALSE)
+
+# check proportion of beads & removed events
+n <- ncol(sce); ns <- c(ncol(res$beads), ncol(res$removed))
+data.frame(
+    check.names=FALSE,
+    "#" = c(ns[1], ns[2]),
+    "%" = 100 * c(ns[1]/n, ns[2]/n),
+    row.names = c("beads", "removed")
+)
+
+# extract data excluding beads & doublets, including normalized data
+sce <- res$data
+assayNames(sce)
+res$scatter
