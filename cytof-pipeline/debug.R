@@ -4,24 +4,36 @@ library(CATALYST)
 library(flowCore)
 library(ggplot2)
 
-ff_name <- "C:/Users/cdbui/Desktop/PBMC8_30min_patient4_BCR-XL.fcs"
-ff_mod_name <- "C:/Users/cdbui/Documents/GitHub/latent-cell-space/cytof-pipeline/data/RawFiles/PBMC8_30min_patient4_BCR-XL_mod.fcs"
+dir <- file.path(getwd(), "data")
+raw_data_dir <- file.path(dir, "RawFiles")
+signal_clean_dir <- file.path(data_dir, "SignalClean")
 
-ff <- read.FCS(ff_name, transformation = FALSE)
-ff_mod <- read.FCS(ff_mod_name, transformation = FALSE)
+files <- list.files(signal_clean_dir,
+                    pattern = ".fcs$",
+                    full.names = TRUE)
 
-pData(parameters(ff))
-pData(parameters(ff_mod))
+# files
 
-ff_col <- colnames(ff)
-ff_exp <- exprs(ff)
+ff1_path <- file.path(raw_data_dir, "cat_sample1.fcs")
+ff2_path <- file.path(raw_data_dir, "cat_sample2.fcs")
 
-ff_col
+# read data
+ff_1 <- read.FCS(ff1_path, transformation = FALSE)
+ff_2 <- read.FCS(ff2_path, transformation = FALSE)
 
-ff_mod_col <- colnames(ff_mod)
-ff_mod_exp <- exprs(ff_mod)
+exp <- exprs(ff_2)
+dim(exp)
 
-ff_mod_col
+exp_u <- unique(exp)
+dim(exp_u)
 
 
-ff_mod_exp[, "165Di"]
+# remove duplicates
+for (file in files) {
+  # read fcs file
+  ff <- read.FCS(file, transformation = FALSE)
+  
+  # extract expression matrix
+  expr <- exprs(ff)
+  expr_dedup <- unique(expr)
+}
