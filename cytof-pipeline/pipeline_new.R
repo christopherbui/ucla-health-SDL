@@ -58,7 +58,7 @@ for (file in files) {
 
 # set cleaned signal data directory
 cleaned_dir <- file.path(data_dir, "Cleaned")
-if(!dir.exists(signal_clean_dir)) dir.create(signal_clean_dir)
+if(!dir.exists(cleaned_dir)) dir.create(cleaned_dir)
 
 # get files to be cleaned
 files <- list.files(bead_norm_dir,
@@ -74,15 +74,15 @@ for (file in files) {
   
   # clean flow rate
   ff <- clean_flow_rate(flow_frame = ff,
-                        out_dir = signal_clean_dir,
+                        out_dir = cleaned_dir,
                         to_plot = TRUE,
                         data_type = "MC")
   
   # clean signal
   ff <- clean_signal(flow_frame = ff,
-                     to_plot = "ALL",
+                     to_plot = "All",
                      out_dir = cleaned_dir,
-                     Segment = 1000,
+                     Segment = 500,
                      arcsine_transform = TRUE,
                      data_type = "MC",
                      non_used_bead_ch = NULL)
@@ -94,8 +94,6 @@ for (file in files) {
 }
 
 
-
-
 # -------------------------------------
 # IDENTIFY ALIQUOT OUTLIERS
 # -------------------------------------
@@ -105,7 +103,7 @@ qc_dir <- file.path(data_dir, "QualityControl")
 if(!dir.exists(qc_dir)) dir.create(qc_dir)
 
 # get data file names
-files <- list.files(signal_clean_dir,
+files <- list.files(cleaned_dir,
                     pattern = ".fcs$",
                     full.names = TRUE)
 
@@ -142,8 +140,9 @@ file_quality_check(fcs_files = files,
 # DEBARCODING
 # -------------------------------------
 
-
-
+# ------------------------------------------------------------------------------
+# AGGREGATION
+# ------------------------------------------------------------------------------
 
 
 

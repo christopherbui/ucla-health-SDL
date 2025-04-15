@@ -65,6 +65,55 @@ flow_rate_bin_addapted <- function (x, second_fraction = 0.1, timeCh = timeCh, t
 }
 
 
+#' flow_rate_check_patch
+#' 
+#' @param x flow frame
+#' @param FlowRateData FlowRateData 
+#' @param timeCh alpha_ alpha value
+#' @param use_decomp_ whether to use decomp or not
+#' 
+#' @return list
+#' 
+flow_rate_check_patch <- function (x, FlowRateData, alpha_ = 0.01, use_decomp_ = TRUE, 
+    deviation_ = "MAD") 
+{
+    fr_frequences <- FlowRateData$frequencies
+    fr_cellBinID <- FlowRateData$cellBinID
+    second_fraction <- FlowRateData$info["second_fraction"]
+    if (length(unique(fr_frequences[, 2])) == 1) {
+        fr_autoqc <- NULL
+    }
+    else {
+        fr_autoqc <- flowAI:::anomaly_detection(fr_frequences[, "tbCounts"], 
+            alpha = alpha_, use_decomp = use_decomp_, deviation = deviation_)
+    }
+    if (is.null(fr_autoqc) || is.null(fr_autoqc$anoms)) {
+        badPerc <- 0
+        newx <- x
+        goodCellIDs <- fr_cellBinID$cellID
+        badCellIDs <- NULL
+    }
+    else {
+        goodCellIDs <- fr_cellBinID$cellID[!(fr_cellBinID$binID %in% 
+            fr_autoqc$anoms$index)]
+        badCellIDs <- setdiff(fr_cellBinID$cellID, goodCellIDs)
+        badPerc <- round(1 - (length(goodCellIDs)/nrow(fr_cellBinID)), 
+            4)
+        params <- parameters(x)
+        keyval <- keyword(x)
+        sub_exprs <- exprs(x)
+        sub_exprs <- sub_exprs[goodCellIDs, ]
+        newx <- flowFrame(exprs = sub_exprs, parameters = params, 
+            description = keyval)
+    }
+    cat(paste0(100 * badPerc, "% of anomalous cells detected in the flow rate check. \n"))
+    return(list(anoms = fr_autoqc$anoms, frequencies = fr_frequences, 
+        FRnewFCS = newx, goodCellIDs = goodCellIDs, badCellIDs = badCellIDs, 
+        res_fr_QC = data.frame(second_fraction = second_fraction, 
+            num_obs = fr_autoqc$num_obs, badPerc = badPerc)))
+}
+
+
 #' clean_flow_rate
 #' 
 #' @description Cleans the flow rate using functions from flowAI package.
@@ -88,9 +137,9 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
     timestep <- 0.01
   } else if (data_type == "FC") {
     time_division <- 1
-    word <- which(grepl("TIMESTEP", names(keyword(flowSet(ff)[[1]])), 
+    word <- which(grepl("TIMESTEP", names(keyword(flow_frame)), 
                         ignore.case = TRUE))
-    timestep <- as.numeric(keyword(flowSet(ff)[[1]])[[word[1]]])
+    timestep <- as.numeric(keyword(flow_frame)[[word[1]]])
   } else{
     stop("type of data MC or FC needs to be specify")
   }
@@ -103,11 +152,15 @@ clean_flow_rate <- function(flow_frame, to_plot = TRUE,
                                          timeCh = "Time", 
                                          timestep = timestep)
   
-  FlowRateQC <- flowAI:::flow_rate_check(x = flow_frame, 
-                                         FlowRateData = FlowRateData, 
-                                         alpha = alpha, 
-                                         use_decomp = TRUE) 
-  
+  # FlowRateQC <- flowAI:::flow_rate_check(x = flow_frame, 
+  #                                        FlowRateData = FlowRateData, 
+  #                                        alpha = alpha, 
+  #                                        use_decomp = TRUE)
+  FlowRateQC <- flow_rate_check_patch(x = flow_frame,
+                                        FlowRateData = FlowRateData,
+                                        alpha_ = alpha,
+                                        use_decomp_ = TRUE)
+
   if (to_plot == TRUE){
     
     out_dir <- file.path(out_dir, "FlowRateCleaning")
@@ -270,7 +323,7 @@ clean_signal <- function(flow_frame,
   if(!dir.exists(out_dir)){
     dir.create(out_dir)
   }
-  
+
   cleaned_data <- flowCut::flowCut(f = ff_t, 
                                    Segment = Segment, 
                                    MaxPercCut = MaxPercCut, 
@@ -284,11 +337,12 @@ clean_signal <- function(flow_frame,
                                    AlwaysClean = AlwaysClean)
   
   ff_t_clean <- cleaned_data$frame
-  
+
   if (arcsine_transform == TRUE){
     ff_clean <- flowCore::transform(ff_t_clean, 
                                     transformList(colnames(flow_frame)[channels_to_transform], 
-                                                  cytofTransform.reverse))
+                                                  CytoNorm:::cytofTransform.reverse
+))
   } else {
     ff_clean <- ff_t_clean
   }
