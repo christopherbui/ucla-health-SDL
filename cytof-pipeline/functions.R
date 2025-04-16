@@ -1270,6 +1270,35 @@ aggregate_files <- function(fcs_files,
   return(flowFrame)
 }
 
+
+#' aggregate_files_patch
+#' 
+#' @description performs aggregation; no debarcoding
+#' 
+#' @param fcs_files Character, full path to fcs_files.
+#' @param output_file Character, the names of the file that will be given
+#' @param out_dir Character, pathway to where the files should be saved, 
+#' @param write_agg_file Logicle, if the fcs files should be saved, if TRUE 
+#' @param cTotal_ Total number of cells to write to output file
+#' 
+#' @return aggregated flow frame 
+
+aggregate_files_patch <- function(fcs_files, output_file, output_dir, write_agg_file = TRUE, cTotal_ = 100000) {
+    message("Aggregating: ", paste(basename(fcs_files), collapse = ", "))
+    
+    # aggregate using FlowSOM
+    agg <- FlowSOM::AggregateFlowFrames(fileNames = fcs_files, cTotal = cTotal_)
+
+    # write the aggregated file
+    if (write_agg_file) {
+        write.FCS(agg, filename = file.path(output_dir, output_file))
+    }
+
+    return(agg)
+}
+
+
+
 #' gate_intact_cells
 #' 
 #' @description Performs gating of intact cells using flowDensity package
