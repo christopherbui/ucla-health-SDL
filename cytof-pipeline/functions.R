@@ -779,9 +779,21 @@ fsom_aof <- function(fcs_files,
                                  backgroundValues = fsom$metaclustering, 
                                  maxNodeSize = 3,
                                  backgroundColors = backgroundColors)
-  fsomTsne <- FlowSOM::PlotDimRed(fsom = fsom, plotFile = NULL, seed = seed, cTotal = 20000,  
-                                  title = "tSNE visualization of FlowSOM metaclusters")
+  # fsomTsne <- FlowSOM::PlotDimRed(fsom = fsom, plotFile = NULL, seed = seed, cTotal = 20000,  
+  #                                 title = "tSNE visualization of FlowSOM metaclusters")
   
+  fsomTsne <- FlowSOM::PlotDimRed(
+    fsom = fsom,
+    seed = seed,
+    cTotal = 20000,
+    title = "tSNE visualization of FlowSOM metaclusters",
+    dimred = function(x) {
+        Rtsne::Rtsne(x, check_duplicates = FALSE)
+    }
+  )
+
+
+
   figure <- ggarrange(fsomPlot, fsomTsne,
                       # labels = c("FlowSOM clustering", "tsne"),
                       ncol = 2, nrow = 1)

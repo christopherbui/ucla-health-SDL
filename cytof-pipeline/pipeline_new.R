@@ -6,8 +6,15 @@ library(SingleCellExperiment)
 
 library(ggplot2)
 library(ggpubr)
+library(flowDensity)
 library(RColorBrewer)
 library(readxl)
+
+
+
+# -------------------------------------
+# SETUP
+# -------------------------------------
 
 # main data directory
 data_dir <- file.path(getwd(), "data")
@@ -17,9 +24,12 @@ raw_data_dir <- file.path(data_dir, "RawFiles")
 if (!dir.exists(raw_data_dir)) dir.create(raw_data_dir)
 
 
+
 # -------------------------------------
 # NORMALIZE
 # -------------------------------------
+
+# set bead normalization directory
 bead_norm_dir <- file.path(data_dir, "BeadNorm")
 if (!dir.exists(bead_norm_dir)) dir.create(bead_norm_dir)
 
@@ -64,6 +74,39 @@ for (file in files) {
                                       "_norm.fcs",
                                       basename(file), ignore.case = TRUE)))
 }
+
+
+
+# -------------------------------------
+# VISUALIZE NORMALIZED FILES
+# -------------------------------------
+
+# NOTE: HAS OUTPUT, BUT NOT FUNCTIONAL
+
+
+# files before normalization
+files_b <- list.files(raw_data_dir,
+                      pattern = ".fcs$",
+                      ignore.case = TRUE,
+                      full.names = TRUE)
+
+# files after normalization
+files_a <- list.files(bead_norm_dir,
+                      pattern = ".fcs$",
+                      ignore.case = TRUE,
+                      full.names = TRUE)
+
+plot_marker_quantiles(files_after_norm = files_a, 
+                      files_before_norm = files_b, 
+                      batch_pattern = "(.*)", 
+                      arcsine_transform = TRUE,
+                      remove_beads = TRUE,
+                      bead_channel = "140", 
+                      uncommon_prefix = NULL,
+                      markers_to_plot = c("CD", "HLA", "IgD", "IL", "TNF",
+                                          "TGF", "GR", "IFNa"),
+                      manual_colors = c("darkorchid4", "darkorange", "darkgreen"),
+                      out_dir = bead_norm_dir)
 
 
 
@@ -115,6 +158,7 @@ for (file in files) {
 }
 
 
+
 # -------------------------------------
 # IDENTIFY ALIQUOT OUTLIERS
 # -------------------------------------
@@ -134,18 +178,19 @@ files <- list.files(cleaned_dir,
 
 
 # change Rtsne() function argument: check_duplicates = FALSE
-# by default, it thinks fcs files have duplicates; confirmed fcs has no duplicates
+# by default, it thinks fcs files have duplicates.
+# I confirmed fcs has no duplicates.
 
 # Save original function
-original_rtsne <- get("Rtsne", envir = asNamespace("Rtsne"))
-
-# Unlock the binding so we can overwrite it
-unlockBinding("Rtsne", asNamespace("Rtsne"))
-
-# Overwrite the function within the namespace
-assign("Rtsne", function(..., check_duplicates = FALSE) {
-  original_rtsne(..., check_duplicates = check_duplicates)
-}, envir = asNamespace("Rtsne"))
+# original_rtsne <- get("Rtsne", envir = asNamespace("Rtsne"))
+# 
+# # Unlock the binding so we can overwrite it
+# unlockBinding("Rtsne", asNamespace("Rtsne"))
+# 
+# # Overwrite the function within the namespace
+# assign("Rtsne", function(..., check_duplicates = FALSE) {
+#   original_rtsne(..., check_duplicates = check_duplicates)
+# }, envir = asNamespace("Rtsne"))
 
 
 file_quality_check(fcs_files = files, 
@@ -161,13 +206,14 @@ file_quality_check(fcs_files = files,
 
 
 # -------------------------------------
-# DEBARCODING
+# DEBARCODING (SKIPPED)
 # -------------------------------------
 
 
-# ------------------------------------------------------------------------------
+
+# -------------------------------------
 # AGGREGATION
-# ------------------------------------------------------------------------------
+# -------------------------------------
 
 # set aggregated output directory
 aggregate_dir <- file.path(data_dir, "Aggregated")
@@ -178,7 +224,7 @@ if (!dir.exists(aggregate_dir)) dir.create(aggregate_dir)
 files <- list.files(cleaned_dir,
                     pattern = ".fcs$",
                     full.names = TRUE)
-files
+
 # aggregate
 agg <- aggregate_files_patch(fcs_files = files,
                              output_file = "Aggregate.fcs",
@@ -188,9 +234,9 @@ agg <- aggregate_files_patch(fcs_files = files,
 
 
 
-# ------------------------------------------------------------------------------
+# -------------------------------------
 # GATING
-# ------------------------------------------------------------------------------
+# -------------------------------------
 
 # set gating output directory
 gate_dir <- file.path(data_dir, "Gated")
@@ -235,6 +281,15 @@ for (file in files){
 dev.off()
 
 
+
+# -------------------------------------
+# NORMALIZATION USING REFERENCE SAMPLE (SKIPPED, NO BATCH)
+# -------------------------------------
+
+
+# -------------------------------------
+# PLOT BATCH EFFECT (SKIPPED)
+# -------------------------------------
 
 
 
