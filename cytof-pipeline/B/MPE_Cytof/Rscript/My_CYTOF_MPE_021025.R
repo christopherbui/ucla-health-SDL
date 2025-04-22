@@ -77,9 +77,16 @@ allSampleInfo <- allSampleInfo[, -1]
 # Check quantile of reference samples in different batches 
 #-------------------------------------------------------------------------------
 # -------
-selPanel <- c("TBNK")  #*******
+# selPanel <- c("TBNK")  #*******
 # selPanel <- c("Myeloid")  #*******
-# selPanel <- c("Cytokines")  #*******
+selPanel <- c("Cytokines")  #*******
+
+
+# make output directories
+panel_output_dir <- file.path(workFolder, "Ranalysis", selPanel)
+if(!dir.exists(panel_output_dir)) dir.create(panel_output_dir)
+
+
 
 #--------
 # get sample info
@@ -117,7 +124,8 @@ quantiles_ref <- extract_marker_quantiles_4SDL(
 
 Ftab_quantile_ref <- quantiles_ref
 
-write.table(Ftab_quantile_ref, "tmp.txt", sep = "\t", quote = FALSE, row.names = FALSE)
+quantiles_ref_file <- paste0(selPanel, "_quantiles_Ref.txt")
+write.table(Ftab_quantile_ref, file.path(panel_output_dir, quantiles_ref_file), sep = "\t", quote = FALSE, row.names = FALSE)
 
 
 # define ncols for ggplot2 below
@@ -154,10 +162,14 @@ p_y <- tmp4plot %>%
           legend.position = "bottom")
 
 # --------------------------------------------------------------
-# check panel expression in each reference TBNK cells
+# check panel expression in each reference Cytokine/Myeloid/TBNK cells
 # 2/28/25
 # --------------------------------------------------------------
-selPanel <- c("TBNK")  #*******
+# selPanel <- c("TBNK")  #*******
+# selPanel <- c("Myeloid") #*******
+selPanel <- c("Cytokines")
+
+
 sampleInfo  <- dplyr::filter(allSampleInfo,
                              panel_id == selPanel & patient_id == "Ref")
 
@@ -183,23 +195,30 @@ tmp_panel$marker_class[tmpi] <- c("type")
 # setup input folder
 bead_norm_dir <- file.path(workFolder,"CYTOF_data",
                            "BeadNorm",selPanel)
-all_fcs_files <- list.files(bead_norm_dir, 
-                            pattern = ".fcs$", 
+
+# GET ONLY REF FILES; JUST FOR TESTING
+all_fcs_files <- list.files(bead_norm_dir,
+                            pattern = "_Ref.*\\.fcs$",
                             full.names = TRUE)
 
-# setup input folder
-bead_norm_dir <- file.path(workFolder,"CYTOF_data",
-                           "Gated",selPanel)
-all_fcs_files <- list.files(bead_norm_dir, 
-                            pattern = ".fcs$", 
-                            full.names = TRUE)
 
-# setup input folder
-bead_norm_dir <- file.path(workFolder,"CYTOF_data",
-                           "Gated_2gates",selPanel)
-all_fcs_files <- list.files(bead_norm_dir, 
-                            pattern = ".fcs$", 
-                            full.names = TRUE)
+# all_fcs_files <- list.files(bead_norm_dir, 
+#                             pattern = ".fcs$", 
+#                             full.names = TRUE)
+# 
+# # setup input folder
+# bead_norm_dir <- file.path(workFolder,"CYTOF_data",
+#                            "Gated",selPanel)
+# all_fcs_files <- list.files(bead_norm_dir, 
+#                             pattern = ".fcs$", 
+#                             full.names = TRUE)
+# 
+# # setup input folder
+# bead_norm_dir <- file.path(workFolder,"CYTOF_data",
+#                            "Gated_2gates",selPanel)
+# all_fcs_files <- list.files(bead_norm_dir, 
+#                             pattern = ".fcs$", 
+#                             full.names = TRUE)
 
 # ---
 nfiles <- length(all_fcs_files)
@@ -231,7 +250,7 @@ Batch <- sapply(Ftab[,1],
 Ftab_out <- Ftab %>% mutate(Batch=Batch)
 
 fout <- paste(selPanel,"_beadNorm_nonTransform_qc.txt",sep="")
-write.table(Ftab_out,file.path("Ranalysis",fout),
+write.table(Ftab_out,file.path(panel_output_dir, fout),
             sep="\t",quote=F,row.names=FALSE)
 
 # -------------------
@@ -267,61 +286,87 @@ Batch <- sapply(Ftab[,1],
 Ftab_out <- Ftab %>% mutate(Batch=Batch)
 
 fout <- paste(selPanel,"_beadNorm_arcsinhTransform_qc.txt",sep="")
-write.table(Ftab_out,file.path("Ranalysis",fout),
+write.table(Ftab_out,file.path(panel_output_dir, fout),
             sep="\t",quote=F,row.names=FALSE)
 
-# ------
-fout <- paste(selPanel,"_cleanedGated_arcsinhTransform_qc.txt",sep="")
-write.table(Ftab_out,file.path("Ranalysis",fout),
-            sep="\t",quote=F,row.names=FALSE)
-# -----
-fout <- paste(selPanel,"_cleanedGated2gates_arcsinhTransform_qc.txt",sep="")
-write.table(Ftab_out,file.path("Ranalysis",fout),
-            sep="\t",quote=F,row.names=FALSE)
+# # ------
+# fout <- paste(selPanel,"_cleanedGated_arcsinhTransform_qc.txt",sep="")
+# write.table(Ftab_out,file.path("Ranalysis",fout),
+#             sep="\t",quote=F,row.names=FALSE)
+# # -----
+# fout <- paste(selPanel,"_cleanedGated2gates_arcsinhTransform_qc.txt",sep="")
+# write.table(Ftab_out,file.path("Ranalysis",fout),
+#             sep="\t",quote=F,row.names=FALSE)
 
 
 # -----------------------------------------
 #export events number
 # -------------------------------------------
-selPanel <- c("TBNK")  #*******
+# selPanel <- c("TBNK")  #*******
+# selPanel <- c("Myeloid") #******
+selPanel <- c("Cytokines")
 
 #---------------------
 # setup input folder
 bead_norm_dir <- file.path(workFolder,"CYTOF_data",
                            "BeadNorm",selPanel)
-all_fcs_files <- list.files(bead_norm_dir, 
-                            pattern = ".fcs$", 
+
+# GET ONLY REF FILES; JUST FOR TESTING
+# all_fcs_files <- list.files(bead_norm_dir,
+#                             pattern = "_Ref.*\\.fcs$",
+#                             full.names = TRUE)
+
+all_fcs_files <- list.files(bead_norm_dir,
+                            pattern = ".fcs$",
                             full.names = TRUE)
+
+
 
 # setup input folder
-bead_norm_dir <- file.path(workFolder,"CYTOF_data",
-                           "Gated",selPanel)
-all_fcs_files <- list.files(bead_norm_dir, 
-                            pattern = ".fcs$", 
-                            full.names = TRUE)
-
-bead_norm_dir <- file.path(workFolder,"CYTOF_data",
-                           "Cleaned",selPanel)
-all_fcs_files <- list.files(bead_norm_dir, 
-                            pattern = ".fcs$", 
-                            full.names = TRUE)
+# bead_norm_dir <- file.path(workFolder,"CYTOF_data",
+#                            "Gated",selPanel)
+# all_fcs_files <- list.files(bead_norm_dir, 
+#                             pattern = ".fcs$", 
+#                             full.names = TRUE)
+# 
+# bead_norm_dir <- file.path(workFolder,"CYTOF_data",
+#                            "Cleaned",selPanel)
+# all_fcs_files <- list.files(bead_norm_dir, 
+#                             pattern = ".fcs$", 
+#                             full.names = TRUE)
 
 # -----------------------
+
+
+# normalized, uncleaned
 nfiles <- length(all_fcs_files)
 Ftab <- matrix(NA,nfiles,3)
 
-pb <- reloadProgressBar(nfiles)
-for (i in c(1:nfiles)){   
-  f_raw <- flowCore::read.FCS(all_fcs_files[i],transformation=FALSE)
+# normalized, cleaned
+all_fcs_files_cleaned <- list.files(clean_dir,
+                            pattern = ".fcs$",
+                            full.names = TRUE)
+nfiles_cleaned <- length(all_fcs_files_cleaned)
+Ftab <- matrix(NA,nfiles,3)
+
+
+# change to 'all_fcs_files' OR 'all_fcs_files_cleaned' below
+pb <- reloadProgressBar(nfiles_cleaned)
+for (i in c(1:nfiles_cleaned)){   
+  f_raw <- flowCore::read.FCS(all_fcs_files_cleaned[i],transformation=FALSE)
   orgName <- unlist(keyword(f_raw ,"$FIL"))
-  Ftab[i,1] <- basename(all_fcs_files[i])
+  Ftab[i,1] <- basename(all_fcs_files_cleaned[i])
   Ftab[i,2] <- orgName 
   Ftab[i,3] <- nrow(f_raw)
   pb$tick()
 }
 colnames(Ftab) <- c("file","FIL","event__no")
-write.table(Ftab,file.path("Ranalysis","tmp.txt"),
+
+Ftab_file_name <- paste0(selPanel, "_events_number_cleaned.txt")
+write.table(Ftab,file.path(panel_output_dir, Ftab_file_name),
             sep="\t",quote=F,row.names=FALSE)
+
+
 
 # ------------------------------------------------------------
 
@@ -333,6 +378,8 @@ f <- flowCore::read.FCS(fcs_files[i])
 keyword(f, "$FIL")
 
 spillover(f)
+# Error in .local(x, ...) : No spillover matrix stored in that sample
+# Error in .local(x, ...) : No spillover matrix stored in that sample
 # Error in .local(x, ...) : No spillover matrix stored in that sample
 
 tmp_channels <- colnames(f)
@@ -349,17 +396,18 @@ ggcyto::autoplot(f, "Pt198Di")
 # Signal Cleaning --------------------------------------------------------------
 #-------------------------------------------------------------------------------
 # list_panels <- c("TBNK","Myeloid","Cytokines")
-list_panels <- c("TBNK")
+# list_panels <- c("TBNK")
+# list_panels <- c("Myeloid")
+list_panels <- c("Cytokines")
 
-
-# filter for only REF here
-
+seg_threshold <- 500
 
 for (selPanel in list_panels){
   
   # get sample info
+  # GET ONLY REF FILES; JUST FOR TESTING
   sampleInfo  <- dplyr::filter(allSampleInfo,
-                               panel_id==selPanel)  #**** & patient_id =="Ref")
+                               panel_id==selPanel) # & patient_id =="Ref")
   
   # get panel info
   fin_panel <- paste(selPanel,"_markers_022625.txt",sep="")
@@ -377,8 +425,8 @@ for (selPanel in list_panels){
   if(!dir.exists(clean_dir)) dir.create(clean_dir, recursive = TRUE)
   
   # flowAI: set and create the directory where cleaned fcs files will be saved
-  flowAI_clean_dir <- file.path(getwd(), "CYTOF_data", "Cleaned-flowAI")
-  if (!dir.exists(flowAI_clean_dir)) dir.create(flowAI_clean_dir, recursive = TRUE)
+  # flowAI_clean_dir <- file.path(getwd(), "CYTOF_data", "Cleaned-flowAI")
+  # if (!dir.exists(flowAI_clean_dir)) dir.create(flowAI_clean_dir, recursive = TRUE)
   
   # Define which files will be cleaned
   select_fcs_files <- sampleInfo$file_name    #***must be in the same folder
@@ -394,49 +442,253 @@ for (selPanel in list_panels){
                            "Gd154Di","Gd157Di","Lu176Di")
   
   # Clean file by file in the loop, saving new file with each loop
+  pb <- reloadProgressBar(length(files_b))
   for (file in files_b) {
     
     # read fcs file
-    # ff <- flowCore::read.FCS(filename = file, 
-    #                          transformation = FALSE)
+    ff <- flowCore::read.FCS(filename = file,
+                             transformation = FALSE)
     
     
     # clean flow rate: use flowAI using Time
     # using single function flow_auto_qc
-    ff <- flowAI::flow_auto_qc(file,
-               remove_from = "all",   #***FR,FS, and FM
-              output = 1,            #**only clean signal==1
-              timeCh = "Time",
-              ChExcludeFS = channels_to_exclude,
-              html_report=FALSE,
-              mini_report=FALSE,
-              fcs_QC = FALSE,
-              folder_results = FALSE)
+    # ff <- flowAI::flow_auto_qc(file,
+    #            remove_from = "all",   #***FR,FS, and FM
+    #           output = 1,            #**only clean signal==1
+    #           timeCh = "Time",
+    #           ChExcludeFS = channels_to_exclude,
+    #           html_report=FALSE,
+    #           mini_report=FALSE,
+    #           fcs_QC = FALSE,
+    #           folder_results = FALSE)
     # ff_2@exprs[,"QCvector"]-> ttmp
     
-    # ff_3 <- clean_signal(flow_frame = ff,
-    #                      channels_to_clean=channels_to_clean,
-    #                      to_plot = "None",
-    #                      out_dir = clean_dir,
-    #                      Segment = 1000,
-    #                      arcsine_transform = TRUE,
-    #                      data_type = "MC",
-    #                      non_used_bead_ch = "140")
+    ff_3 <- clean_signal(flow_frame = ff,
+                         channels_to_clean=channels_to_clean,
+                         to_plot = "None",
+                         out_dir = clean_dir,
+                         Segment = seg_threshold,
+                         arcsine_transform = TRUE,
+                         data_type = "MC",
+                         non_used_bead_ch = "140")
     
     # Write FCS files
-    # flowCore::write.FCS(ff_3,
-    #                     file = file.path(clean_dir, gsub("_beadNorm","_cleaned", basename(file)))) 
+    flowCore::write.FCS(ff_3,
+                        file = file.path(clean_dir, gsub("_beadNorm","_cleaned", basename(file))))
     
     # Write FCS files from flowAI
-    flowCore::write.FCS(ff,
-                        file = file.path(flowAI_clean_dir, gsub("_beadNorm", "_flowAIcleaned", basename(file))))
+    # flowCore::write.FCS(ff,
+    #                     file = file.path(flowAI_clean_dir, gsub("_beadNorm", "_flowAIcleaned", basename(file))))
     
     pb$tick()
   }
 }
 
+# ------------------------------------------------------------------------------
+# Files outliers detection -----------------------------------------------------
+# output is the score from fsom
+#-------------------------------------------------------------------------------
+
+# list_panels <- c("TBNK","Myeloid","Cytokines")
+
+list_panels <- c("TBNK")
+
+batch4extractPatt <- "(?i).*(batch[0-9]*).*.fcs"
+dna_ch_4fsom <- c("191Ir","193Ir")   #*****using desc column
+via_ch_4fsom <- c("195Pt")    #***Cisplatin
+nCells_thres <- c(10000,3000,1000)   #*****
+
+
+for (k in c(1:length(list_panels))){
+  selPanel <- list_panels[k]
+  tmp_nCells_thres <- nCells_thres[k]
+  
+  # get sample info
+  # GET ONLY REF FILES; JUST FOR TESTING
+  sampleInfo  <- dplyr::filter(allSampleInfo,
+                               panel_id==selPanel & patient_id =="Ref")
+  
+  # get panel info --> function and lineage markers
+  fin_panel <- paste(selPanel,"_markers_022625.txt",sep="")
+  panel_info <- read.delim(file.path("Ranalysis",fin_panel),
+                           sep="\t",header=T,stringsAsFactors=FALSE)
+  
+  lineage_idx <- which(panel_info$marker_class=="lineage")  #****
+  lineage_markers <- panel_info$fcs_desc[lineage_idx]  
+  function_idx <- which(panel_info$marker_class=="function")  #****
+  function_markers <- panel_info$fcs_desc[function_idx] 
+  pheno_4fsom <- c(dna_ch_4fsom,via_ch_4fsom,lineage_markers)    #*******
+  
+  # set input directory where cleaned fcs files will be saved
+  clean_dir <- file.path(workFolder,"CYTOF_data", 
+                         "Cleaned",selPanel)
+  
+  # Define out_dir for diagnostic plots
+  quality_dir <- file.path(workFolder,"CYTOF_data", 
+                           "Quality_control",selPanel)
+  if(!dir.exists(quality_dir)) dir.create(quality_dir, recursive = TRUE)
+  
+  # Define which files will be cleaned
+  ###select_fcs_files <- sampleInfo$file_name    #***must be in the same folder
+  files_b <- list.files(clean_dir, 
+                        pattern = "_cleaned.fcs$", 
+                        full.names = TRUE)
+  files_b <- files_b[-1]
+  
+  # Define batch_id for each file 
+  file_batch_id <- stringr::str_match(basename(files_b),batch4extractPatt)[,2] #*****
+  
+  ###nCells = length(fcs_files)*tmp_nCells_thres
+  file_quality_check_4SDL(fcs_files = files_b, 
+                          file_batch_id = file_batch_id, 
+                          nCellsPerSample=tmp_nCells_thres,
+                          out_dir = quality_dir,
+                          phenotyping_markers = pheno_4fsom, 
+                          arcsine_transform = TRUE, 
+                          nClus = 10,
+                          sd = 3)
+  
+  
+  #--------------------------------------
+  # BAD OUTPUT
+  #
+  # Maybe some markers have NULL descriptions? 
+  #
+  # Yb176Di
+  # Ir191Di
+  # Pt195Di
+  # Pt198Di
+  # Bi209Di
+  # Error in seq.default(min(x, na.rm = T), max(x, na.rm = T), length.out = n +  :
+  #                        'from' must be a finite number
+  #                      In addition: Warning messages:
+  #                        1: In min(x, na.rm = T) : no non-missing arguments to min; returning Inf
+  #                      2: In max(x, na.rm = T) : no non-missing arguments to max; returning -Inf
+  #--------------------------------------
+  
+}
+
+
+
+selPanel <- "TBNK"
+
+batch4extractPatt <- "(?i).*(batch[0-9]*).*.fcs"
+dna_ch_4fsom <- c("191Ir","193Ir")   #*****using desc column
+via_ch_4fsom <- c("195Pt")    #***Cisplatin
+nCells_thres <- c(10000,3000,1000)   #*****
+
+# get panel info --> function and lineage markers
+fin_panel <- paste(selPanel,"_markers_022625.txt",sep="")
+panel_info <- read.delim(file.path("Ranalysis",fin_panel),
+                         sep="\t",header=T,stringsAsFactors=FALSE)
+
+lineage_idx <- which(panel_info$marker_class=="lineage")  #****
+lineage_markers <- panel_info$fcs_desc[lineage_idx]  
+function_idx <- which(panel_info$marker_class=="function")  #****
+function_markers <- panel_info$fcs_desc[function_idx] 
+pheno_4fsom <- c(dna_ch_4fsom,via_ch_4fsom,lineage_markers)    #*******
+
+
+fcs_path <- "C:/Users/cdbui/Box/ChristopherProjects/MPE_Cytof/CYTOF_data/Cleaned/TBNK"
+fcs_files <- list.files(fcs_path, pattern = ".fcs$", full.names = TRUE)
+
+problem_list <- list()
+
+# check if markers have NULL description
+for (f in fcs_files) {
+  ff <- read.FCS(f, transformation = FALSE)
+  descs <- pData(parameters(ff))$desc
+  names(descs) <- pData(parameters(ff))$name
+  
+  missing_markers <- pheno_4fsom[pheno_4fsom %in% descs[is.na(descs)]]
+  print(missing_markers)
+  if (length(missing_markers) > 0) {
+    problem_list[[basename(f)]] <- missing_markers
+  }
+}
+
+
+# check if expression data has nulls
+for (f in fcs_files) {
+  ff <- read.FCS(f, transformation = FALSE)
+  param_info <- pData(parameters(ff))
+  desc_map <- param_info$desc
+  names(desc_map) <- param_info$name
+  
+  cat("Checking:", basename(f), "\n")
+  missing_markers <- c()
+  
+  for (marker in pheno_4fsom) {
+    channel <- names(desc_map)[desc_map == marker]
+    
+    # Skip if no channels match the marker
+    if (length(channel) == 0) next
+    
+    # Filter to only existing columns in exprs
+    valid_channels <- channel[channel %in% colnames(exprs(ff))]
+    
+    # Loop through valid channels
+    for (ch in valid_channels) {
+      expr_data <- exprs(ff)[, ch]
+      if (all(is.na(expr_data))) {
+        cat(sprintf("  Marker: %-10s | Channel: %-10s | all NA: TRUE | n events: %d\n",
+                    marker, ch, length(expr_data)))
+        missing_markers <- c(missing_markers, marker)
+      }
+    }
+  }
+  
+  
+  if (length(missing_markers) > 0) {
+    problem_list[[basename(f)]] <- missing_markers
+  }
+}
+
+# Final summary
+cat("\nSummary of files with all-NA markers:\n")
+print(problem_list)
+
+print(problem_list)
 
 
 
 
 
+# get panel info --> function and lineage markers
+fin_panel <- paste(selPanel,"_markers_022625.txt",sep="")
+panel_info <- read.delim(file.path("Ranalysis",fin_panel),
+                         sep="\t",header=T,stringsAsFactors=FALSE)
+
+lineage_idx <- which(panel_info$marker_class=="lineage")  #****
+lineage_markers <- panel_info$fcs_desc[lineage_idx]  
+function_idx <- which(panel_info$marker_class=="function")  #****
+function_markers <- panel_info$fcs_desc[function_idx] 
+pheno_4fsom <- c(dna_ch_4fsom,via_ch_4fsom,lineage_markers)    #*******
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ff_test <- read.FCS("C:/Users/cdbui/Box/ChristopherProjects/MPE_Cytof/CYTOF_data/Cleaned/TBNK/TBNK_Ref-PBMC_01_batch1_cleaned.fcs", transformation = FALSE)
+param <- flowCore::parameters(ff_test)
+desc <- flowCore::pData(param)$desc
+print(desc)
+param <- pData(parameters(ff_test))
+param
