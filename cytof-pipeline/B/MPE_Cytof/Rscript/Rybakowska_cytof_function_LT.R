@@ -508,28 +508,28 @@ remove_mad_outliers_4SDL <- function(flow_frame,
                                 n_mad = 2,
                                 mad_f = mad,
                                 plot = TRUE,
-                                center = "deltaT_center",
+                                center = "center",
                                 main = "",
                                 ...){
   boundaries <- matrix(NA,
                        nrow = 5,
                        ncol = length(channels),
-                       dimnames = list(c("deltaT_median", "deltaT_center", "deltaT_mad", "deltaT_l_lim", "deltaT_u_lim"),
+                       dimnames = list(c("median", "center", "mad", "l_lim", "u_lim"),
                                        channels))
   for (channel in channels) {
     x <- flow_frame@exprs[, channel]
-    boundaries["deltaT_median", channel] <- median(x)
-    boundaries["deltaT_center", channel] <- density(x)$x[which.max(density(x)$y)]
-    boundaries["deltaT_mad", channel] <- mad_f(x,
+    boundaries["median", channel] <- median(x)
+    boundaries["center", channel] <- density(x)$x[which.max(density(x)$y)]
+    boundaries["mad", channel] <- mad_f(x,
                                         center = boundaries[center, channel] )
-    boundaries["deltaT_l_lim", channel] <- boundaries[center, channel] - n_mad * boundaries["deltaT_mad", channel]
-    boundaries["deltaT_u_lim", channel] <- boundaries[center, channel] + n_mad * boundaries["deltaT_mad", channel]
+    boundaries["l_lim", channel] <- boundaries[center, channel] - n_mad * boundaries["mad", channel]
+    boundaries["u_lim", channel] <- boundaries[center, channel] + n_mad * boundaries["mad", channel]
   }
   
   selection <- rep(TRUE, nrow(flow_frame))
   for (channel in channels) {
-    selection <- selection & (flow_frame@exprs[, channel] > boundaries["deltaT_l_lim", channel])
-    selection <- selection & (flow_frame@exprs[, channel] < boundaries["deltaT_u_lim", channel])
+    selection <- selection & (flow_frame@exprs[, channel] > boundaries["l_lim", channel])
+    selection <- selection & (flow_frame@exprs[, channel] < boundaries["u_lim", channel])
   }
   percentage <- (sum(selection)/length(selection))*100
   if (plot) {
@@ -540,11 +540,11 @@ remove_mad_outliers_4SDL <- function(flow_frame,
                           ...)
     if(length(channels) == 2) {
       points(flow_frame@exprs[!selection, channels], col = "red", pch = ".")
-      abline(v = boundaries[c("deltaT_l_lim", "deltaT_u_lim"), channels[1]], col = "grey")
-      abline(h = boundaries[c("deltaT_l_lim", "deltaT_u_lim"), channels[2]], col = "grey")
+      abline(v = boundaries[c("l_lim", "u_lim"), channels[1]], col = "grey")
+      abline(h = boundaries[c("l_lim", "u_lim"), channels[2]], col = "grey")
     } else if(length(channels) == 1) {
       points(flow_frame@exprs[!selection, c(channels, "Ir191Di")], pch = ".")
-      abline(v = boundaries[c("deltaT_l_lim", "deltaT_u_lim"), channels[1]], col = "grey")
+      abline(v = boundaries[c("l_lim", "u_lim"), channels[1]], col = "grey")
     }
   }
 
