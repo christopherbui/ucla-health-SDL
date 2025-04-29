@@ -190,11 +190,12 @@ fsom_aof_4SDL <- function(fcs_files,
   }
   
   # pdf(file.path(out_dir, filename), width = 14, height = 10)
-  fsomPlot <- FlowSOM::PlotStars(fsom = fsom, 
+  fsomPlot <- FlowSOM::PlotStars(fsom = fsom,
                                  title = "FlowSOM clustering",
-                                 backgroundValues = fsom$metaclustering, 
+                                 backgroundValues = fsom$metaclustering,
                                  maxNodeSize = 3,
                                  backgroundColors = backgroundColors)
+
   fsomTsne <- FlowSOM::PlotDimRed(fsom = fsom, plotFile = NULL, seed = seed, cTotal = 20000,  
                                   title = "tSNE visualization of FlowSOM metaclusters")
   
@@ -214,47 +215,86 @@ aof_scoring_4SDL <- function(fcs_files,
                         fsom,
                         out_dir,
                         batch = NULL){
-  
+
   if(check(phenotyping_channels) == 0){
-    
+
     o <- capture.output(ff_tmp <- read.FCS(file.path(fcs_files[1])))    #***error in original code
     markers <- FlowSOM::GetMarkers(ff_tmp, colnames(ff_tmp))
-    phenotyping_channels <- grep(paste(phenotyping_markers, 
+    phenotyping_channels <- grep(paste(phenotyping_markers,
                                        collapse = ("|")), markers, value = TRUE)
-    
+
     if(length(grep("Ir", phenotyping_channels)) > 1){
-      phenotyping_channels <- phenotyping_channels[-(grep("Ir", 
+      phenotyping_channels <- phenotyping_channels[-(grep("Ir",
                                                           phenotyping_channels)[2])]
     }
   }
-  
+
   aof_scores <- matrix(NA,
-                       nrow = length(fcs_files), 
+                       nrow = length(fcs_files),
                        ncol = length(phenotyping_channels),
-                       dimnames = list(fcs_files,  
+                       dimnames = list(fcs_files,
                                        names(phenotyping_channels)))
-  
-  for(file in fcs_files){ 
+
+  for(file in fcs_files){
     print(paste("calculating AOF", file))
     File_ID <- which(fcs_files == file)
     idx <- which(fsom$data[,"File"] == File_ID)
     fcs_data <- fsom$data[idx,]
     MC <- fsom$metaclustering[fsom$map$mapping[idx, 1]]
-    
-    aof_tmp <- cytutils::greedyCytometryAof(fcs_data = fcs_data, 
-                                            y = MC, 
+
+    aof_tmp <- cytutils::greedyCytometryAof(fcs_data = fcs_data,
+                                            y = MC,
                                             channel_names = names(phenotyping_channels),
-                                            width = 0.05, 
-                                            cofactor = 5, 
-                                            verbose = TRUE) 
+                                            width = 0.05,
+                                            cofactor = 5,
+                                            verbose = TRUE)
     aof_scores[file, ] <- aof_tmp$Aof
   }
-  
-  scaled_aof_score(aof_scores = aof_scores, 
+
+  scaled_aof_score(aof_scores = aof_scores,
                    out_dir = out_dir,
-                   aof_channels = phenotyping_channels, 
+                   aof_channels = phenotyping_channels,
                    batch = batch)
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 change_fcs_FIL <- function(fcs_files,
@@ -341,20 +381,22 @@ gate_intact_cells_4SDL <- function(flow_frame,
   ##  }
   ##}
   
-  for(m in c("Ir193Di", "Ir191Di")){
-     if (tr[[m]][1]<0.1 | is.na(tr[[m]][1])){
-        if (tr[[m]][2]>hard_cutoff){
-           tr_thres[[m]][3]  <- hard_cutoff
-           selection[ff_t@exprs[,m] < tr_thres[[m]][3], "intact"] <- FALSE
-        } else {
-           tr_thres[[m]][3] <- tr[[m]][2]
-           selection[ff_t@exprs[,m] < tr[[m]][2], "intact"] <- FALSE
-        }
-     }else{
-         tr_thres[[m]][3] <- tr[[m]][1]
-         selection[ff_t@exprs[,m] < tr[[m]][1], "intact"] <- FALSE
+  for (m in c("Ir193Di", "Ir191Di")) {
+    print("doing new function")
+    if (tr[[m]][1] < 2 | is.na(tr[[m]][1])) {
+    # if (tr[[m]][1] < 0.1 | is.na(tr[[m]][1])) {
+      if (tr[[m]][2] > hard_cutoff) {
+        tr_thres[[m]][3] <- hard_cutoff
+        selection[ff_t@exprs[, m] < tr_thres[[m]][3], "intact"] <- FALSE
+      } else {
+        tr_thres[[m]][3] <- tr[[m]][2] # tr[[m]][2] could be really low regardless of < 2
+        selection[ff_t@exprs[, m] < tr[[m]][2], "intact"] <- FALSE
       }
-   }
+    } else {
+      tr_thres[[m]][3] <- tr[[m]][1]
+      selection[ff_t@exprs[, m] < tr[[m]][1], "intact"] <- FALSE
+    }
+  }
 
  
   percentage <- (sum(selection)/length(selection))*100
@@ -368,12 +410,22 @@ gate_intact_cells_4SDL <- function(flow_frame,
 
   tr_thres <- as.data.frame(tr_thres)
   tr_thres$info <- c("low","high","selected")
-  fout4thres <- gsub(".fcs","_intact_thres.txt",file_name)
-  write.table(tr_thres,fout4thres,sep="\t",quote=F,row.names=F)
+
+  # add file name column
+  tr_thres$file_name <- gsub("\\.fcs$", "_gated.fcs", basename(file_name), ignore.case = TRUE)
+
+
+  # fout4thres <- gsub(".fcs","_intact_thres.txt",file_name)
+  # write.table(tr_thres,fout4thres,sep="\t",quote=F,row.names=F)
  
+  # filter for rows that have "intact" == TRUE
   ff <- ff[selection[,"intact"], ]
   
-  return(ff)
+  
+  # return(ff)
+
+  # output the dataframe for concatenation
+  return(list(flowFrame = ff, info_df = tr_thres))
 }
 
 # -------------------------------------------------------------------------------
@@ -439,12 +491,115 @@ gate_live_cells_4SDL <- function(flow_frame,
   points(ff_t@exprs[!selection[,"live"], c(v_ch, "Ir191Di")], pch = ".") 
   
   ff <- ff[selection[,"live"], ]
+
+  # make dataframe to output
+  tr_thres <- tr
+  tr_thres <- as.data.frame(tr_thres)
+  tr_thres$file_name <- gsub("\\.fcs$", "_gated.fcs", basename(file_name), ignore.case = TRUE)
+
   
-  return(ff)
+  return(list(flowFrame = ff, info_df = tr_thres))
   
 }
 
 
+remove_mad_outliers_4SDL <- function(flow_frame, 
+                                channels = "Event_length", 
+                                n_mad = 2,
+                                mad_f = mad,
+                                plot = TRUE,
+                                center = "deltaT_center",
+                                main = "",
+                                ...){
+  boundaries <- matrix(NA,
+                       nrow = 5,
+                       ncol = length(channels),
+                       dimnames = list(c("deltaT_median", "deltaT_center", "deltaT_mad", "deltaT_l_lim", "deltaT_u_lim"),
+                                       channels))
+  for (channel in channels) {
+    x <- flow_frame@exprs[, channel]
+    boundaries["deltaT_median", channel] <- median(x)
+    boundaries["deltaT_center", channel] <- density(x)$x[which.max(density(x)$y)]
+    boundaries["deltaT_mad", channel] <- mad_f(x,
+                                        center = boundaries[center, channel] )
+    boundaries["deltaT_l_lim", channel] <- boundaries[center, channel] - n_mad * boundaries["deltaT_mad", channel]
+    boundaries["deltaT_u_lim", channel] <- boundaries[center, channel] + n_mad * boundaries["deltaT_mad", channel]
+  }
+  
+  selection <- rep(TRUE, nrow(flow_frame))
+  for (channel in channels) {
+    selection <- selection & (flow_frame@exprs[, channel] > boundaries["deltaT_l_lim", channel])
+    selection <- selection & (flow_frame@exprs[, channel] < boundaries["deltaT_u_lim", channel])
+  }
+  percentage <- (sum(selection)/length(selection))*100
+  if (plot) {
+    flowDensity::plotDens(flow_frame, 
+                          c(channels, "Ir191Di"), 
+                          main = paste0(main, " ( ", format(round(percentage, 2), 
+                                                            nsmall = 2), "% )"),
+                          ...)
+    if(length(channels) == 2) {
+      points(flow_frame@exprs[!selection, channels], col = "red", pch = ".")
+      abline(v = boundaries[c("deltaT_l_lim", "deltaT_u_lim"), channels[1]], col = "grey")
+      abline(h = boundaries[c("deltaT_l_lim", "deltaT_u_lim"), channels[2]], col = "grey")
+    } else if(length(channels) == 1) {
+      points(flow_frame@exprs[!selection, c(channels, "Ir191Di")], pch = ".")
+      abline(v = boundaries[c("deltaT_l_lim", "deltaT_u_lim"), channels[1]], col = "grey")
+    }
+  }
+
+  # generate dataframe
+  df_boundaries <- as.data.frame(t(boundaries))
+  colnames(df_boundaries) <- paste0(rep(colnames(boundaries), each = nrow(boundaries)),
+                                    "_",
+                                    rep(rownames(boundaries), times = ncol(boundaries)))
+  # return(selection)
+  return(list(selection = selection, info_df = df_boundaries))
+}
 
 
+gate_singlet_cells_4SDL <- function(flow_frame, 
+                               channels = "Event_length", 
+                               arcsine_transform = TRUE,
+                               file_name = NULL,
+                               n_mad = 2,
+                               ...){
+  
+  if (is.null(file_name)){
+    file_name <- flow_frame@description$FIL
+  } else {
+    file_name 
+  }
+  
+  if(arcsine_transform == TRUE){
+    
+    flow_frame_t <- flowCore::transform(flow_frame, 
+                                        flowCore::transformList(colnames(flow_frame)[grep("Di", colnames(flow_frame))], 
+                                                                CytoNorm::cytofTransform))
+  } else {
+    flow_frame_t <- flow_frame
+  }
+  
+  selection <- matrix(TRUE,
+                      nrow = nrow(flow_frame),
+                      ncol = 1,
+                      dimnames = list(NULL,
+                                      c("singlets")))  
+  
+  results <- remove_mad_outliers_4SDL(flow_frame = flow_frame_t, 
+                                      channels = channels,
+                                      main = paste("Singlets", file_name),
+                                      n_mad = n_mad,
+                                      xlim = c(0, 100), ylim = c(0, 8), ...)
 
+  selection[, "singlets"] <- results$selection
+
+  # extract gating info dataframe & add file name column
+  gate_info_df <- results$info_df
+  gate_info_df$file_name <- gsub("\\.fcs$", "_gated.fcs", basename(file_name), ignore.case = TRUE)
+  
+  flow_frame <- flow_frame[selection[,"singlets"], ]
+  
+  return(list(flowFrame = flow_frame, info_df = gate_info_df))
+  
+}

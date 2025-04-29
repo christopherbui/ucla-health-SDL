@@ -493,6 +493,12 @@ batch4extractPatt <- "(?i).*(batch[0-9]*).*.fcs"
 dna_ch_4fsom <- c("191Ir","193Ir")   #*****using desc column
 via_ch_4fsom <- c("195Pt")    #***Cisplatin
 nCells_thres <- c(10000,3000,1000)   #*****
+# put 1000 for everything ^^
+
+# change vvvvv
+# tnkb -> median event_no_cleaned
+# min event_no because thres >> event_no then code failes nCell_thres
+
 
 for (k in c(1:length(list_panels))){
    selPanel <- list_panels[k]
@@ -533,7 +539,7 @@ for (k in c(1:length(list_panels))){
    ###nCells = length(fcs_files)*tmp_nCells_thres
    file_quality_check_4SDL(fcs_files = files_b, 
                    file_batch_id = file_batch_id, 
-                   nCellsPerSample=tmp_nCells_thres,
+                   nCellsPerSample=tmp_nCells_thres, # put everything 1000
                    out_dir = quality_dir,
                    phenotyping_markers = pheno_4fsom, 
                    arcsine_transform = TRUE, 
@@ -769,6 +775,17 @@ change_fcs_FIL(fcs_files)
 # ****Three gates: intact (Ir193 and Ir191), doublet (Time Event) and live (Cisplatin)
 # --> renames to Gated_2gated
 #-------------------------------------------------------------------------------
+
+
+# DO THIS ONE FOR GATING
+# DO THIS ONE FOR GATING
+# DO THIS ONE FOR GATING
+# DO THIS ONE FOR GATING
+
+# RECORD HOW YOU GATE
+# NEED gating.png output for LT
+
+
 selPanel <- c("TBNK")  #*******
 hard_cutoff = 4   #**hard_cutoff for Ir channels in gating intact cells
 

@@ -1361,8 +1361,12 @@ remove_mad_outliers <- function(flow_frame,
       abline(v = boundaries[c("l_lim", "u_lim"), channels[1]], col = "grey")
     }
   }
-  
-  return(selection)
+
+  # generate dataframe
+  df_boundaries <- as.data.frame(t(boundaries))
+
+  # return(selection)
+  return(list(selection = selection, info_df = df_boundaries))
 }
 
 

@@ -1,31 +1,7 @@
 # **************************************************************************
-# Inventory of files
+# Setting up
 # 2/10/25
 # **************************************************************************
-# Run in R v4.3.3
-workFolder <- paste("U:/cdbui/", "MPE_Cytof", sep = "")
-setwd(workFolder)
-
-parentDir <- paste("U:/cdbui/", "MPE_Cytof", sep = "")
-
-tmp_listFiles <- list.files(path = parentDir,
-                            pattern = ".fcs",
-                            recursive = TRUE,
-                            full.names = FALSE)
-
-tmp_fileNames <- sapply(tmp_listFiles,
-                        function(x) basename(x),
-                        simplify = TRUE)
-
-tmp_out <- cbind(tmp_listFiles, tmp_fileNames)
-write.table(tmp_out,
-            "tmp.txt",
-            sep = "\t",
-            quote = FALSE,
-            row.names = FALSE,
-            col.names = FALSE)
-
-
 # Run in R v4.3.3
 library(stringr)
 library(tidyverse)
@@ -49,15 +25,15 @@ library(CATALYST)
 library(SingleCellExperiment)
 library(SummarizedExperiment)
 
+library(progress)
+
+
+# Adjust path to scripts accordingly
 source(paste("U:/cdbui/MPE_Cytof/Rscript/", "Rybakowska_cytof_function.R", sep = ""))
 source("C:/Users/cdbui/Documents/GitHub/latent-cell-space/cytof-pipeline/B/MPE_Cytof/Rscript/Rybakowska_cytof_function_LT.R")
 
-workFolder <- paste("U:/cdbui/MPE_Cytof", sep = "")
-setwd(workFolder)
 
-# progress bar
-library(progress)
-
+# Create progress bar to visualize processing status
 reloadProgressBar <- function(iterations) {
   pb <- progress_bar$new(
     format = "  Processing [:bar] :percent eta: :eta",
@@ -67,15 +43,60 @@ reloadProgressBar <- function(iterations) {
 }
 
 
-# Step 1: setting environment
+
+# Set working folder
+workFolder <- paste("U:/cdbui/", "MPE_Cytof", sep = "")
+setwd(workFolder)
+
+
+
+# **************************************************************************
+# Inventory of files
+# 2/10/25
+# **************************************************************************
+# Run in R v4.3.3
+
+inventory_files <- function(dir=workFolder) {
+
+  tmp_listFiles <- list.files(path = dir,
+                              pattern = ".fcs$",
+                              recursive = TRUE,
+                              full.names = FALSE)
+
+  tmp_fileNames <- sapply(tmp_listFiles,
+                          function(x) basename(x),
+                          simplify = TRUE)
+
+  tmp_out <- cbind(tmp_listFiles, tmp_fileNames)
+  write.table(tmp_out,
+              "FilesInventory_Table.txt",
+              sep = "\t",
+              quote = FALSE,
+              row.names = FALSE,
+              col.names = FALSE)
+  
+  return (list(tmp_listFiles, tmp_fileNames))
+}
+
+inventory <- inventory_files(workFolder)
+
+
+# ------------------------------------------------------------------------------
+# STEP 1: setting environment
+# ------------------------------------------------------------------------------
+
+# Sample metadata
+sampleInfoFile <- "mpe_cytof_sampleInfo_022625.txt"
+
 # Get sample info of all samples/panels
-fin_info <- file.path("Ranalysis","mpe_cytof_sampleInfo_022625.txt")
+fin_info <- file.path(workFolder, "Ranalysis", sampleInfoFile)
 allSampleInfo <- read.delim(fin_info, sep = "\t", header = TRUE, stringsAsFactors = FALSE)
 allSampleInfo <- allSampleInfo[, -1]
+
+
 # ------------------------------------------------------------------------------
 # Check quantile of reference samples in different batches 
 #-------------------------------------------------------------------------------
-# -------
 
 selPanel <- c("TBNK")  #*******
 # selPanel <- c("Myeloid")  #*******
@@ -91,16 +112,16 @@ if(!dir.exists(panel_output_dir)) dir.create(panel_output_dir)
 #--------
 # get sample info
 sampleInfo  <- dplyr::filter(allSampleInfo,
-                 panel_id == selPanel & patient_id == "Ref")
+                             panel_id == selPanel & patient_id == "Ref")
 
 # get panel info
 fin_panel <- paste(selPanel, "_markers_022625.txt", sep = "")
 panel_info <- read.delim(file.path("Ranalysis", fin_panel),
-                        sep = "\t", header = TRUE, stringsAsFactors = FALSE)
+                         sep = "\t", header = TRUE, stringsAsFactors = FALSE)
 
 # setup input folder
 bead_norm_dir <- file.path(workFolder, "CYTOF_data",
-                   "BeadNorm", selPanel)
+                           "BeadNorm", selPanel)
 select_fcs_files <- sampleInfo$file_name    #***must be in the same folder
 
 # Define batch id and sample id for each file
@@ -111,11 +132,11 @@ batch_pattern <- batch4extractPatt
 ##batch_pattern <- str_match(basename(select_fcs_files), batch4extractPatt)[,2]
 
 quantiles_ref <- extract_marker_quantiles_4SDL(
-      select_fcs_files = select_fcs_files,
-      in_dir = bead_norm_dir,
-      batch_pattern = batch4extractPatt,
-      arcsine_transform = TRUE, 
-      markers_to_plot = NULL)
+  select_fcs_files = select_fcs_files,
+  in_dir = bead_norm_dir,
+  batch_pattern = batch4extractPatt,
+  arcsine_transform = TRUE, 
+  markers_to_plot = NULL)
 
 # NOTE: Did not run code below; quantiles_ref already in wide format
 
@@ -133,33 +154,33 @@ ncols <- 4
 
 sel_marker4plot <- panel_info$fcs_desc[1:14]
 tmp4plot <- subset(quantiles_ref ,
-    is.element(quantiles_ref$Marker,sel_marker4plot))
+                   is.element(quantiles_ref$Marker,sel_marker4plot))
 p_x <- tmp4plot %>%   
-    ggplot2::ggplot(aes(x = Sample,
-               y = Value,
-               color = Marker)) +
-    geom_point() +
-     ylab(label = sel_marker4plot)+  
-    facet_wrap(~ Marker, ncol = ncols, scales = "free_x") +
-    theme_minimal() + 
-    theme(axis.text.x = element_text(angle = 90, hjust = 1),
-          panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-          legend.position = "bottom")
+  ggplot2::ggplot(aes(x = Sample,
+                      y = Value,
+                      color = Marker)) +
+  geom_point() +
+  ylab(label = sel_marker4plot)+  
+  facet_wrap(~ Marker, ncol = ncols, scales = "free_x") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        legend.position = "bottom")
 
 # plot range (0.25,0.99) and median
 sel_marker4plot <- panel_info$fcs_desc[1:9]
 tmp4plot <- subset(Ftab_quantile_ref,
-    is.element(quantiles_ref$Marker,sel_marker4plot))
+                   is.element(quantiles_ref$Marker,sel_marker4plot))
 p_y <- tmp4plot %>%   
-    ggplot2::ggplot(aes(x = Sample,
-               y = Value.0.5,
-               color = Batch)) +
-    geom_pointrange(aes(ymin = Value.0.25, ymax = Value.0.99)) +
-    facet_wrap(~ Marker, scales = "free_x") +
-    theme_minimal() + 
-    theme(axis.text.x = element_text(angle = 90, hjust = 1),
-          panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-          legend.position = "bottom")
+  ggplot2::ggplot(aes(x = Sample,
+                      y = Value.0.5,
+                      color = Batch)) +
+  geom_pointrange(aes(ymin = Value.0.25, ymax = Value.0.99)) +
+  facet_wrap(~ Marker, scales = "free_x") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        legend.position = "bottom")
 
 # --------------------------------------------------------------
 # check panel expression in each reference Cytokine/Myeloid/TBNK cells
@@ -345,8 +366,8 @@ Ftab <- matrix(NA,nfiles,3)
 
 # normalized, cleaned
 all_fcs_files_cleaned <- list.files(clean_dir,
-                            pattern = ".fcs$",
-                            full.names = TRUE)
+                                    pattern = ".fcs$",
+                                    full.names = TRUE)
 nfiles_cleaned <- length(all_fcs_files_cleaned)
 Ftab <- matrix(NA,nfiles,3)
 
@@ -492,19 +513,19 @@ for (selPanel in list_panels){
 
 # list_panels <- c("TBNK","Myeloid","Cytokines")
 
-# list_panels <- c("TBNK")
-list_panels <- c("Myeloid")
+list_panels <- c("TBNK")
+# list_panels <- c("Myeloid")
 # list_panels <- c("Cytokines")
 
 batch4extractPatt <- "(?i).*(batch[0-9]*).*.fcs"
 dna_ch_4fsom <- c("191Ir","193Ir")   #*****using desc column
 via_ch_4fsom <- c("195Pt")    #***Cisplatin
 # nCells_thres <- c(10000,3000,1000)   #*****
-nCells_thres <- c(500)
+nCells_thres <- c(1000)
 
 
 for (k in c(1:length(list_panels))){
-
+  
   selPanel <- list_panels[k]
   tmp_nCells_thres <- nCells_thres[1]
   
@@ -528,28 +549,27 @@ for (k in c(1:length(list_panels))){
                          "Cleaned", selPanel)
   
   # Define out_dir for diagnostic plots
-  quality_dir <- file.path(workFolder,"CYTOF_data",
+  quality_dir <- file.path(workFolder,"CYTOF_data", 
                            "Quality_control", selPanel)
   if(!dir.exists(quality_dir)) dir.create(quality_dir, recursive = TRUE)
-  # quality_dir <- file.path("C:/Users/cdbui/Documents", "Quality_control_DEBUG_PlotRedDim", selPanel)
-  # if(!dir.exists(quality_dir)) dir.create(quality_dir, recursive = TRUE)
   
   # Define which files will be cleaned
   ###select_fcs_files <- sampleInfo$file_name    #***must be in the same folder
   files_b <- list.files(clean_dir, 
                         pattern = "_cleaned.fcs$", 
                         full.names = TRUE)
+  files_b <- files_b[-1]
   
   # Define batch_id for each file 
   file_batch_id <- stringr::str_match(basename(files_b),batch4extractPatt)[,2] #*****
   
   ###nCells = length(fcs_files)*tmp_nCells_thres
-  file_quality_check_4SDL(fcs_files = files_b,
-                          file_batch_id = file_batch_id,
+  file_quality_check_4SDL(fcs_files = files_b, 
+                          file_batch_id = file_batch_id, 
                           nCellsPerSample=tmp_nCells_thres,
                           out_dir = quality_dir,
-                          phenotyping_markers = pheno_4fsom,
-                          arcsine_transform = TRUE,
+                          phenotyping_markers = pheno_4fsom, 
+                          arcsine_transform = TRUE, 
                           nClus = 10,
                           sd = 3)
 }
@@ -589,8 +609,8 @@ files <- list.files(path = aggregate_dir,
 # Gate the files and plot gating strategy for each file
 n_plots <- 3 # intact, singlet, live
 png(file.path(gate_dir, paste0("gating.png")),
-              width = n_plots * 300,
-              height = length(files) * 300)
+    width = n_plots * 300,
+    height = length(files) * 300)
 
 layout(matrix(1:(length(files) * n_plots),
               ncol = n_plots, 
@@ -598,51 +618,28 @@ layout(matrix(1:(length(files) * n_plots),
 
 message("Started: ", format(Sys.time(), tz = "America/Los_Angeles"))
 pb <- reloadProgressBar(length(files))
-
-# master df to hold all gating information
-master_df <- NULL
-
 for (file in files) {
-
+  
   ff <- flowCore::read.FCS(filename = file, 
                            transformation = FALSE)
-
+  
   # function internally considers "Ir193Di", "Ir191Di"
-  res_intact <- gate_intact_cells_4SDL(flow_frame = ff,
+  ff <- gate_intact_cells_4SDL(flow_frame = ff,
                                file_name = basename(file),
                                hard_cutoff = hard_cutoff)
   
-  res_singlet <- gate_singlet_cells_4SDL(flow_frame = res_intact$flowFrame,
+  ff <- gate_singlet_cells(flow_frame = ff,
                            channels = "Event_length",
                            file_name = basename(file))
   
-  res_live <- gate_live_cells_4SDL(flow_frame = res_singlet$flowFrame,
+  ff <- gate_live_cells_4SDL(flow_frame = ff,
                              viability_channel = "Pt195Di", # cisplatin; higher binding ouput with dead cells
                              out_dir = gate_dir)
   
-
-  # gating thresholds
-  df_intact <- res_intact$info_df
-  df_singlet <- res_singlet$info_df
-  df_live <- res_live$info_df
-
-  # join gating threshold information
-  tmp_merged_df <- merge(df_intact, df_singlet, by = "file_name", all = TRUE)
-  merged_df <- merge(tmp_merged_df, df_live, by = "file_name", all = TRUE)
-
-  # append gating threshold information to master df
-  master_df <- bind_rows(master_df, merged_df)
-
-  # output gated fcs file
   flowCore::write.FCS(ff, file.path(gate_dir, gsub(".fcs", "_gated.fcs", basename(file))))
-
+  
   pb$tick()
 }
-
-# save gating threshold information for all fcs files
-write.csv(master_df,
-          file = file.path(gate_dir, paste0(selPanel, "_Gating_Thresholds.csv")),
-          row.names = FALSE)
 
 dev.off()
 message("Ended: ", format(Sys.time(), tz = "America/Los_Angeles"))
@@ -651,6 +648,10 @@ message("Ended: ", format(Sys.time(), tz = "America/Los_Angeles"))
 
 
 
-
-
-
+test_path <- "U:/cdbui/MPE_Cytof/CYTOF_data/Cleaned/Myeloid"
+fcs_files <- list.files(test_path,
+                        pattern = ".fcs$",
+                        full.names = TRUE)
+class(fcs_files)
+tmp <- c("a", "ajldfja")
+class(tmp)
