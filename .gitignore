@@ -5,4 +5,5 @@
 
 .DS_Store
 
-cytof-pipeline/data
+cytof-pipeline/explore
+cytof-pipeline/cytof-pipeline.Rproj
