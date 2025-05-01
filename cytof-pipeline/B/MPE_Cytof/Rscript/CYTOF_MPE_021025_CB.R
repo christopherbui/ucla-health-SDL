@@ -565,9 +565,9 @@ for (k in c(1:length(list_panels))){
 # --> renames to Gated_2gated
 #-------------------------------------------------------------------------------
 
-# selPanel <- c("TBNK")  #*******
+selPanel <- c("TBNK")  #*******
 # selPanel <- c("Myeloid") #******
-selPanel <- c("Cytokines")
+# selPanel <- c("Cytokines")
 
 # singlet deltaT threshold
 event_length_cutoff <- 50

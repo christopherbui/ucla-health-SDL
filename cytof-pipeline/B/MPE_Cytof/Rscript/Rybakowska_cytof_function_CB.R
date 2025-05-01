@@ -597,8 +597,7 @@ gate_live_cells_4SDL <- function(flow_frame,
                         xlim = c(0, 8), ylim = c(0, 8), ...)
   
   abline(h = tr[["Ir191Di"]])
-  # abline(v = tr[[v_ch]])
-  abline(v = tr_thres[[v_ch]])
+  abline(v = tr[[v_ch]])
   
   points(ff_t@exprs[!selection[,"live"], c(v_ch, "Ir191Di")], pch = ".") 
   
