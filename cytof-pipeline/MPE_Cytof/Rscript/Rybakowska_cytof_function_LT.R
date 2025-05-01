@@ -597,14 +597,14 @@ gate_live_cells_4SDL <- function(flow_frame,
                         xlim = c(0, 8), ylim = c(0, 8), ...)
   
   abline(h = tr[["Ir191Di"]])
-  abline(v = tr[[v_ch]])
+  # abline(v = tr[[v_ch]])
+  abline(v = tr_thres[[v_ch]])
   
   points(ff_t@exprs[!selection[,"live"], c(v_ch, "Ir191Di")], pch = ".") 
   
   ff <- ff[selection[,"live"], ]
 
   # make dataframe to output
-  tr_thres <- tr
   tr_thres <- as.data.frame(tr_thres)
   tr_thres$file_name <- gsub("\\.fcs$", "_gated.fcs", basename(file_name), ignore.case = TRUE)
 

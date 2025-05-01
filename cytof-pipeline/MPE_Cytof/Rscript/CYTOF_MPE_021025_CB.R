@@ -50,7 +50,7 @@ library(SingleCellExperiment)
 library(SummarizedExperiment)
 
 source(paste("U:/cdbui/MPE_Cytof/Rscript/", "Rybakowska_cytof_function.R", sep = ""))
-source("C:/Users/cdbui/Documents/GitHub/latent-cell-space/cytof-pipeline/B/MPE_Cytof/Rscript/Rybakowska_cytof_function_LT.R")
+source("C:/Users/cdbui/Documents/GitHub/latent-cell-space/cytof-pipeline/MPE_Cytof/Rscript/Rybakowska_cytof_function_LT.R")
 
 workFolder <- paste("U:/cdbui/MPE_Cytof", sep = "")
 setwd(workFolder)
