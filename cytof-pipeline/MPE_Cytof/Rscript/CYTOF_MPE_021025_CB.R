@@ -561,20 +561,20 @@ for (k in c(1:length(list_panels))){
 # --> renames to Gated_2gated
 #-------------------------------------------------------------------------------
 
-# selPanel <- c("TBNK")  #*******
+selPanel <- c("TBNK")  #*******
 # selPanel <- c("Myeloid") #******
-selPanel <- c("Cytokines")
+# selPanel <- c("Cytokines")
 
 # singlet deltaT threshold
 event_length_cutoff <- 50
 
 # intact thresholds
-hard_cutoff_low <- 2
-hard_cutoff_hi <- 4
+intact_accepted_thres <- c(1.5, 4)
+intact_adjusted_thres <- c(2, 3)
 
 # viability thresholds
-accepted_thres <- c(3, 6)
-adjusted_thres <- c(4, 6)
+live_accepted_thres <- c(3, 6)
+live_adjusted_thres <- c(4, 6)
 
 
 # Set input directory - clean dir
@@ -619,14 +619,14 @@ for (file in files) {
   # function internally considers "Ir193Di", "Ir191Di"
   res_intact <- gate_intact_cells_4SDL(flow_frame = res_singlet$flowFrame,
                                file_name = basename(file),
-                               hard_cutoff_low = hard_cutoff_low,
-                               hard_cutoff_hi = hard_cutoff_hi)
+                               accepted_thres = intact_accepted_thres,
+                               adjusted_thres = intact_adjusted_thres)
   
   res_live <- gate_live_cells_4SDL(flow_frame = res_intact$flowFrame,
                           viability_channel = "Pt195Di", # cisplatin; higher binding ouput with dead cells
                           out_dir = gate_dir,
-                          accepted_thres = accepted_thres,
-                          adjusted_thres = adjusted_thres)
+                          accepted_thres = live_accepted_thres,
+                          adjusted_thres = live_adjusted_thres)
 
 
   # gating thresholds

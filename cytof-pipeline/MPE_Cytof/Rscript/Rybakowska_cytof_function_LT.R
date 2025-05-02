@@ -420,8 +420,8 @@ gate_intact_cells_4SDL_old <- function(flow_frame,
 
 gate_intact_cells_4SDL <- function(flow_frame, 
                               file_name = NULL,
-                              hard_cutoff_low = 2,
-                              hard_cutoff_hi = 4,
+                              accepted_thres = c(1.5, 4),
+                              adjusted_thres = c(2, 3),
                               tinypeak_removal1 = 0.8,
                               tinypeak_removal2 = 0.8,
                               alpha1 = 0.05,
@@ -452,6 +452,7 @@ gate_intact_cells_4SDL <- function(flow_frame,
                                       c("intact")))
   
   tr <- list()
+  
   for(m in c("Ir193Di", "Ir191Di")){
     
     tr[[m]] <- c(flowDensity::deGate(ff_t, m,
@@ -467,29 +468,31 @@ gate_intact_cells_4SDL <- function(flow_frame,
   
   for (m in c("Ir193Di", "Ir191Di")) {
 
-    if (tr[[m]][1] < 1.5 | is.na(tr[[m]][1])) { # lower end < 1.5
+    if (tr[[m]][1] < accepted_thres[1] | is.na(tr[[m]][1])) { # lower end < accepted_thres[1]
 
-      if (tr[[m]][2] < 1.5) {                   # both ends < 1.5
+      if (tr[[m]][2] < accepted_thres[1]) {                   # upper < accepted_thres[1], completely lower accepted interval
 
-        tr_thres[[m]][3] <- hard_cutoff_low
+        tr_thres[[m]][3] <- adjusted_thres[1]
         selection[ff_t@exprs[, m] < tr_thres[[m]][3], "intact"] <- FALSE
 
-      } else if (tr[[m]][2] > hard_cutoff_hi) { # lower < 1.5 and upper > 4
+      } else if (tr[[m]][2] > accepted_thres[2]) {            # upper > accepted_thres[2], i.e. (lower,end) interval >  accepted_thres interval
 
-        tr_thres[[m]][3] <- hard_cutoff_hi
+        tr_thres[[m]][3] <- adjusted_thres[2]
         selection[ff_t@exprs[, m] < tr_thres[[m]][3], "intact"] <- FALSE
 
-      } else {                                  # lower < 1.5 and upper < 4
+      } else {                                                #  upper is inside the accepted_thres interval
 
         tr_thres[[m]][3] <- tr[[m]][2]
         selection[ff_t@exprs[, m] < tr_thres[[m]][3], "intact"] <- FALSE
 
       }
-    } else {                                    # lower end > 1.5
-
+    } else if (tr[[m]][1] < accepted_thres[2]) {              # lower is inside the accepted_thres interval
       tr_thres[[m]][3] <- tr[[m]][1]
       selection[ff_t@exprs[, m] < tr[[m]][1], "intact"] <- FALSE
-
+      
+    } else {                                                  # lower > accepted_thres[2], i.e. completely outside accepted interval
+      tr_thres[[m]][3] <- tr[[m]][1]
+      selection[ff_t@exprs[, m] < tr[[m]][1], "intact"] <- FALSE
     }
   }
  

@@ -41,7 +41,9 @@ workFolder <- paste("U:/cdbui/", "MPE_Cytof", sep = "")
 setwd(workFolder)
 
 # set panel
-selPanel <- "TBNK"
+# selPanel <- "TBNK"
+# selPanel <- "Myeloid"
+selPanel <- "Cytokines"
 
 bead_norm_dir <- file.path(workFolder, "CYTOF_data", "BeadNorm", selPanel)
 clean_dir <- file.path(workFolder, "CYTOF_data", "Cleaned", selPanel)
