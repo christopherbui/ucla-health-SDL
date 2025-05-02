@@ -319,6 +319,7 @@ change_fcs_FIL <- function(fcs_files,
     flowCore::write.FCS(x = f, 
          filename = file.path(out_dir, fileName), 
          endian = "big")
+    message(i)
    }
 }
    

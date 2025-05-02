@@ -35,7 +35,8 @@ library(pals)
 library(scales)
 library(ggplot2)
 library(pheatmap)
-library(pandoc)   #required by flowAI
+# library(pandoc)   #required by flowAI
+library(cowplot)
 
 library(flowCore)
 library(flowAI)
@@ -48,6 +49,8 @@ library(CytoNorm)
 library(CATALYST)
 library(SingleCellExperiment)
 library(SummarizedExperiment)
+library(diffcyt)
+library(scater)
 
 source(paste("U:/cdbui/MPE_Cytof/Rscript/", "Rybakowska_cytof_function.R", sep = ""))
 source("C:/Users/cdbui/Documents/GitHub/ucla-health-SDL/cytof-pipeline/MPE_Cytof/Rscript/Rybakowska_cytof_function_LT.R")
@@ -662,17 +665,18 @@ message("Ended: ", format(Sys.time(), tz = "America/Los_Angeles"))
 # Normalization using reference sample -----------------------------------------
 #-------------------------------------------------------------------------------
 
-# selPanel <- c("TBNK")  #*******
-selPanel <- c("Myeloid") #******
+selPanel <- c("TBNK")
+# selPanel <- c("Myeloid")
 # selPanel <- c("Cytokines")
-
-# get panel info
-fin_panel <- paste(selPanel, "_markers_022625.txt", sep="")
-panel_info <- read.delim(file.path("Ranalysis", fin_panel), sep = "\t", header = TRUE, stringsAsFactors = FALSE)
 
 sel4ref <- c(1:7)     #***
 batch4extractPatt <- "(?i).*(batch[0-9]*).*.fcs"  #****
 refPattern <- c("Ref.*_gated.fcs$")
+
+
+# get panel info
+fin_panel <- paste(selPanel, "_markers_022625.txt", sep="")
+panel_info <- read.delim(file.path("Ranalysis", fin_panel), sep = "\t", header = TRUE, stringsAsFactors = FALSE)
 
 # get channel info
 dna_ch <- c("Ir191Di","Ir193Di")   #*****
@@ -701,7 +705,7 @@ channels <- colnames(ff)[colnames(ff) %in% channels_to_norm]
 
 # set output directory
 norm_dir <- file.path(workFolder, "CYTOF_data", "CytoNormed", selPanel)
-if (!dir.exists(norm_dir)) (dir.create(norm_dir))
+if (!dir.exists(norm_dir)) (dir.create(norm_dir, recursive = TRUE))
 
 # build normalization model using reference samples & plot quantiles
 png(file.path(norm_dir, "005_095_normalization.png"),
@@ -711,7 +715,7 @@ png(file.path(norm_dir, "005_095_normalization.png"),
 model <- CytoNorm::QuantileNorm.train(files = files_ref,
                                       labels = labels_ref,
                                       channels = channels,
-                                      transformList = transformList(channels, CytoNorm::cytoTransform),
+                                      transformList = transformList(channels, CytoNorm::cytofTransform),
                                       nQ = 2,
                                       limit = c(0, 8),
                                       quantileValues = c(0.05, 0.95),
@@ -736,4 +740,42 @@ labels <- stringr::str_match(basename(files), batch4extractPatt)[, 2]
 # normalize files
 CytoNorm::QuantileNorm.normalize(model = model,
                                  files = files,
-                                 labels = )
+                                 labels = labels,
+                                 transformList = transformList(channels, CytoNorm::cytofTransform),
+                                 transformList.reverse = transformList(channels, CytoNorm::cytofTransform.reverse),
+                                 outputDir = norm_dir)
+
+
+# ----------------------------------------------------------------------------------------
+
+
+# Normally, we have to change $FIL for normalized gated files.
+# But we will use only gated data for changing $FIL & downstream flowSOM & UMAP
+
+
+# update '$FIL' in fcs files --> output in the subfolder, "updateFileName"
+# Set input directory 
+selPanel <- c("TBNK")
+# selPanel <- c("Myeloid")
+# selPanel <- c("Cytokines")
+
+input_dir <-  file.path(workFolder, "CYTOF_data", "Gated", selPanel)
+
+fcs_files <- list.files(input_dir, 
+                        pattern = ".fcs$", 
+                        full.names = TRUE)
+
+change_fcs_FIL(fcs_files)
+
+
+
+# *****************************************************************************************
+# Run UMAP by CATALYST 
+# ******Use gated data*******
+#-------------------------------------------------------------------------------
+
+# get sample info
+fin_info <- file.path("Ranalysis","mpe_cytof_sampleInfo_022625.txt")
+allSampleInfo <- read.delim(fin_info, sep = "\t", header = TRUE, stringsAsFactors = FALSE)
+allSampleInfo <- allSampleInfo[, -1]
+
