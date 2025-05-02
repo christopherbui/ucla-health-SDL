@@ -658,7 +658,82 @@ message("Ended: ", format(Sys.time(), tz = "America/Los_Angeles"))
 
 
 
+# ------------------------------------------------------------------------------
+# Normalization using reference sample -----------------------------------------
+#-------------------------------------------------------------------------------
 
+# selPanel <- c("TBNK")  #*******
+selPanel <- c("Myeloid") #******
+# selPanel <- c("Cytokines")
 
+# get panel info
+fin_panel <- paste(selPanel, "_markers_022625.txt", sep="")
+panel_info <- read.delim(file.path("Ranalysis", fin_panel), sep = "\t", header = TRUE, stringsAsFactors = FALSE)
 
+sel4ref <- c(1:7)     #***
+batch4extractPatt <- "(?i).*(batch[0-9]*).*.fcs"  #****
+refPattern <- c("Ref.*_gated.fcs$")
 
+# get channel info
+dna_ch <- c("Ir191Di","Ir193Di")   #*****
+via_ch <- c("Pt195Di")    #***Cisplatin
+target_ch <- panel_info$fcs_colname
+
+channels_to_norm <- c(dna_ch, via_ch, target_ch)
+
+# set input directory
+gate_dir <- file.path(workFolder, "CYTOF_data", "Gated", selPanel)
+
+# define reference samples
+files_ref <- list.files(gate_dir,
+                        pattern = refPattern,
+                        full.names = TRUE,
+                        recursive = TRUE)
+
+files_ref <- files_ref[sel4ref]   #****only for TBNK
+
+# definte batch labels for each file
+labels_ref <- stringr::str_match(basename(files_ref), batch4extractPatt)[, 2]
+
+# define channels to be normalized by reading in fcs to & get channel names
+ff <- read.FCS(files_ref[1])
+channels <- colnames(ff)[colnames(ff) %in% channels_to_norm]
+
+# set output directory
+norm_dir <- file.path(workFolder, "CYTOF_data", "CytoNormed", selPanel)
+if (!dir.exists(norm_dir)) (dir.create(norm_dir))
+
+# build normalization model using reference samples & plot quantiles
+png(file.path(norm_dir, "005_095_normalization.png"),
+    width = length(channels) * 300,
+    height = (length(files_ref) * 2 + 1) * 300)
+
+model <- CytoNorm::QuantileNorm.train(files = files_ref,
+                                      labels = labels_ref,
+                                      channels = channels,
+                                      transformList = transformList(channels, CytoNorm::cytoTransform),
+                                      nQ = 2,
+                                      limit = c(0, 8),
+                                      quantileValues = c(0.05, 0.95),
+                                      goal = "mean",
+                                      plot = TRUE)
+dev.off()
+
+# save model
+saveRDS(object = model,
+        file = file.path(norm_dir, "005_095_model.RDS"))
+
+# set path to files to be normalized
+files <- list.files(file.path(gate_dir),
+                    pattern = "_gated.fcs$",
+                    full.names = TRUE,
+                    recursive = TRUE)
+
+# define batch labels for each file
+# file's batch label corresponds to reference labels
+labels <- stringr::str_match(basename(files), batch4extractPatt)[, 2]
+
+# normalize files
+CytoNorm::QuantileNorm.normalize(model = model,
+                                 files = files,
+                                 labels = )
