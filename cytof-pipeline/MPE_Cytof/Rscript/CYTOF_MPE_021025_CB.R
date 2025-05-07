@@ -186,8 +186,10 @@ function_markers <- panel_info$fcs_desc[function_idx]
 
 ## setup panel input for CATALYST, requiring 3 columns
 tmp_panel <- panel_info[,c("fcs_colname","antigen","marker_class")]
+
 tmpi <- which(grepl("function",panel_info$marker_class)==TRUE)
 tmp_panel$marker_class[tmpi] <- c("state")
+
 tmpi <- which(panel_info$marker_class=="lineage")
 tmp_panel$marker_class[tmpi] <- c("type")
 
@@ -665,18 +667,15 @@ message("Ended: ", format(Sys.time(), tz = "America/Los_Angeles"))
 # Normalization using reference sample -----------------------------------------
 #-------------------------------------------------------------------------------
 
+# select panel
 selPanel <- c("TBNK")
 # selPanel <- c("Myeloid")
 # selPanel <- c("Cytokines")
 
+# set parameters
 sel4ref <- c(1:7)     #***
 batch4extractPatt <- "(?i).*(batch[0-9]*).*.fcs"  #****
 refPattern <- c("Ref.*_gated.fcs$")
-
-
-# get panel info
-fin_panel <- paste(selPanel, "_markers_022625.txt", sep="")
-panel_info <- read.delim(file.path("Ranalysis", fin_panel), sep = "\t", header = TRUE, stringsAsFactors = FALSE)
 
 # get channel info
 dna_ch <- c("Ir191Di","Ir193Di")   #*****
@@ -684,6 +683,10 @@ via_ch <- c("Pt195Di")    #***Cisplatin
 target_ch <- panel_info$fcs_colname
 
 channels_to_norm <- c(dna_ch, via_ch, target_ch)
+
+# get panel info
+fin_panel <- paste(selPanel, "_markers_022625.txt", sep="")
+panel_info <- read.delim(file.path("Ranalysis", fin_panel), sep = "\t", header = TRUE, stringsAsFactors = FALSE)
 
 # set input directory
 gate_dir <- file.path(workFolder, "CYTOF_data", "Gated", selPanel)
@@ -769,6 +772,7 @@ change_fcs_FIL(fcs_files)
 
 
 
+
 # *****************************************************************************************
 # Run UMAP by CATALYST 
 # ******Use gated data*******
@@ -779,3 +783,340 @@ fin_info <- file.path("Ranalysis","mpe_cytof_sampleInfo_022625.txt")
 allSampleInfo <- read.delim(fin_info, sep = "\t", header = TRUE, stringsAsFactors = FALSE)
 allSampleInfo <- allSampleInfo[, -1]
 
+# select panel
+selPanel <- c("TBNK")
+# selPanel <- c("Myeloid")
+# selPanel <- c("Cytokines")
+
+# set parameters
+sel4ref <- c(1:7)     #***
+batch4extractPatt <- "(?i).*(batch[0-9]*).*.fcs"  #****
+refPattern <- c("Ref.*_gated.fcs$")
+dna_ch <- c("Ir191Di","Ir193Di")   #*****
+via_ch <- c("Pt195Di")    #***Cisplatin
+
+# get panel info
+fin_panel <- paste(selPanel, "_markers_022625.txt", sep="")
+panel_info <- read.delim(file.path("Ranalysis", fin_panel), sep = "\t", header = TRUE, stringsAsFactors = FALSE)
+
+
+# get channel info for fsom
+lineage_idx <- which(panel_info$marker_class == "lineage")
+lineage_markers <- panel_info$fcs_desc[lineage_idx]
+function_idx <- which(panel_info$marker_class == "function")
+function_markers <- panel_info$fcs_desc[function_idx]
+
+# set panel input for CATALYST, requires 3 columns
+tmp_panel <- panel_info[, c("fcs_colname", "antigen", "marker_class")]
+tmpi <- which(grepl("function", panel_info$marker_class) == TRUE)
+tmp_panel$marker_class[tmpi] <- c("state")
+tmpi <- which(panel_info$marker_class == "lineage")
+tmp_panel$marker_class[tmpi] <- c("type")
+
+
+# set input directory
+norm_dir <- file.path(workFolder, "CYTOF_data", "Gated", selPanel, "updateFileName")
+
+# extract sample info from fcs files
+getCoreID <- function(x) {
+  xlist <- unlist(strsplit(x, split = "_"))[1:4]
+  xcore <- paste0(xlist, collapse = "_")
+}
+
+# set output directory
+analysis_dir <- file.path(workFolder, "CYTOF_data", "Analysis", selPanel)
+if (!dir.exists(analysis_dir)) dir.create(analysis_dir, recursive = TRUE)
+
+# get fcs files
+fcs_files <- list.files(norm_dir,
+                        pattern = ".fcs$",
+                        full.names = TRUE)
+
+batch_pattern <- c("batch[0-9]*")
+
+tmp_core <- sapply(basename(fcs_files), getCoreID, simplify = TRUE)
+
+# match filenames and metadata
+# prepare metadata for CATALYST
+sampleInfo <- dplyr::filter(allSampleInfo, panel_id == selPanel)
+md_info <- left_join(data.frame(file = basename(fcs_files), sample_id = tmp_core),
+                     sampleInfo[, -1],
+                     by = join_by(sample_id == corename))
+
+md_info$BATCH <- factor(md_info$BATCH)
+
+# import fcs as sce object (arcsinh, transform = TRUE by default)
+sce <- CATALYST::prepData(fcs_files,
+                          panel = tmp_panel,
+                          md = md_info,
+                          panel_cols = list(channel = "fcs_colname", antigen = "antigen", class = "marker_class"),
+                          md_cols = list(file = "file",
+                                         id = "sample_id",
+                                         factors = c("tissue_type", "patient_id", "parental_sample_id", "BATCH")))
+
+SummarizedExperiment(sce)
+# class: SummarizedExperiment 
+# dim: 41 14001111 
+# metadata(0):
+#   assays(1): ''
+# rownames(41): VISTA CD27 ... CD45 CD11B
+# rowData names(0):
+#   colnames: NULL
+# colData names(0):
+
+colnames(rowData(sce))  # features / markers
+dim(colData(sce))       # summary samples data
+
+tmp <- table(colData(sce)$sample_id)    # number of events per file
+tmp_2 <- data.frame(tmp)
+colnames(tmp_2)[1] <- c("sample_id")
+
+
+
+tmp_2 <- left_join(tmp_2, md_info, by = join_by(sample_id))
+kruskal.test(tmp_2$Freq~factor(tmp_2$BATCH))
+# Kruskal-Wallis rank sum test
+# 
+# data:  tmp_2$Freq by factor(tmp_2$BATCH)
+# Kruskal-Wallis chi-squared = 5.2016, df = 6, p-value = 0.5182
+
+tmp_2$BATCH <- factor(tmp_2$BATCH)
+ggplot(tmp_2, aes(x = BATCH, y = Freq)) +
+              geom_boxplot(outlier.shape = NA) +
+              geom_jitter(aes(color = tissue_type), width = 0.25) +
+              scale_y_continuous(trans = "log10") + theme_bw()
+
+write.table(tmp, "tmp.txt", sep = "\t", quote = FALSE, col.names = FALSE)
+
+
+# inspect data
+# inspect Ref-PBMC samples
+ref_sam <- grep("Ref", md_info$sample_id, value = TRUE)
+sce_ref <- sce[, sce$sample_id %in% ref_sam]  # get data only belonging to Ref samples
+colData(sce_ref)$sample_id <- droplevels(colData(sce_ref)$sample_id)
+
+# plot distribution of markers
+# sce_ref <- sce[, sce$sample_id %in% ref_sam[2]] # selects only batch 2
+plotExprs(sce_ref, color_by = "BATCH")
+
+# plot mulit-dimension scale (median marker intensities)
+pbMDS(sce_ref, color_by = "BATCH", label_by = "sample_id")
+
+
+# heatmap of median marker intensities
+# in CyTOF applications, a cosine distance shows good performance
+# scale = "last": aggregate then scale & trim
+plotExprHeatmap(sce_ref,
+                scale = "last",
+                row_anno = FALSE,
+                col_anno = FALSE)
+
+# identification with FlowSOM: using k = 20 metacluster
+# id of som(i.e. 100 clusters) and metacluster are stored in cluster_ids
+set.seed(1234)
+
+sce_ref <- cluster(sce_ref,
+                   features = "type",
+                   xdim = 10,
+                   ydim = 10,
+                   maxK = 20,
+                   seed = 1234)
+
+plotExprHeatmap(sce_ref,
+                features = "type",
+                by = "cluster_id",
+                k = "meta8",
+                bars = TRUE,
+                perc = TRUE)
+
+names(cluster_codes(sce_ref))    # codes of clusters
+
+# access specific clustering resolution i.e. cellIDS
+table(cluster_ids(sce_ref, "som100"))
+table(cluster_ids(sce_ref, "meta20"))
+
+# run t-SNE/UMAP on at most 500/ 1000 cells per sample
+set.seed(1234)
+sce_ref <- runDR(sce_ref, "UMAP", cells = 1e3, features = "type")
+plotDR(sce_ref, "UMAP", color_by = "CD4")
+
+
+
+PLOT_BASIC <- function(sce, color_by = "BATCH", label_by = "sample_id", scale = "last", row_anno = FALSE, col_anno = FALSE, save_plots = TRUE, plot_dir = "Plots") {
+  # plot distribution of all markers across batches
+  marker_dist_PLOT <- plotExprs(sce,
+                                color_by = color_by)
+
+  # plot pseudobulk-level multi-dimensional scaling of median marker intensities
+  pb_mds_PLOT <- pbMDS(sce,
+                       color_by = color_by,
+                       label_by = label_by)
+
+  # heatmap of median marker intensities for all markers
+  marker_heatmap_PLOT <- plotExprHeatmap(sce,
+                                         scale = scale,
+                                         row_anno = row_anno,
+                                         col_anno = col_anno)
+  
+  # save plots
+  if (save_plots) {
+
+    if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
+
+    file_name <- paste0("marker_distribution_by_", color_by, ".png")
+    ggsave(filename = file.path(plot_dir, file_name),
+           plot = marker_dist_PLOT, width = 10, height = 6)
+
+    file_name <- paste0("pbMDS_by_", color_by, "_", label_by, ".png")
+    ggsave(filename = file.path(plot_dir, file_name),
+           plot = pb_mds_PLOT, width = 8, height = 6)
+
+    file_name <- paste0("expr_heatmap_all_markers.png")
+    ggsave(filename = file.path(plot_dir, file_name),
+           plot = marker_heatmap_PLOT, width = 10, height = 8)
+  }
+
+  return(list(
+    marker_dist_PLOT,
+    pb_mds_PLOT,
+    marker_heatmap_PLOT
+  ))
+}
+
+
+
+fsom_cluster <- function (sce, features, xdim = 10, ydim = 10, maxK = 20, seed = 1234) {
+
+  sce_tmp <- cluster(sce,
+                     features = features,
+                     xdim = xdim,
+                     ydim = ydim,
+                     maxK = maxK,
+                     seed = seed)
+  
+  return (sce_tmp)
+}
+
+
+
+plot_fsom_heatmap <- function(sce, features, by = "cluster_id", k = "meta8", scale = "last", bars = TRUE, perc = TRUE, save_plots = TRUE, plot_dir = "Plots") {
+
+  fsom_heatmap_PLOT <- plotExprHeatmap(sce,
+                                       features = features,
+                                       by = by,
+                                       k = k,
+                                       scale = scale,
+                                       bars = TRUE,
+                                       perc = TRUE)
+  if (save_plots) {
+    if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
+
+    file_name <- paste0("fsom_expr_heatmap_", by, "_", k, ".png")
+    ggsave(filename = file.path(plot_dir, file_name),
+           plot = fsom_heatmap_PLOT, width = 10, height = 8)
+  }
+
+  return(fsom_heatmap_PLOT)
+}
+
+
+
+plot_pb_exprs <- function(sce, k = "meta8", features, color_by, facet_by, ncol = 4, save_plots = TRUE, plot_dir = "Plots") {
+  
+  pb_PLOT <- plotPbExprs(sce,
+                         k = k,
+                         features = features,
+                         color_by = color_by,
+                         facet_by = facet_by,
+                         ncol = ncol)
+  if (save_plots) {
+    if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
+
+    file_name <- paste0("pb_expr_by_", k, "_", color_by, "_", facet_by, ".png")
+    ggsave(filename = file.path(plot_dir, file_name),
+           plot = pb_PLOT)
+  }
+
+  return(pb_PLOT)
+}
+
+
+
+run_DR <- function(sce, dr, cells = 1e3, features, assay = "exprs") {
+
+  sce <- runDR(sce,
+               dr = dr,
+               cells = cells,
+               features = features,
+               assay = assay)
+
+  return(sce)
+}
+
+
+
+plot_DR <- function(sce, dr, color_by, facet_by, save_plots = TRUE, plot_dir = "Plots") {
+
+  umap_PLOT <- plotDR(sce,
+                      dr = dr,
+                      color_by = color_by,
+                      facet_by = facet_by)
+  if (save_plots) {
+    if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
+    
+    file_name <- paste0(dr, "_by_", color_by, "_", facet_by, ".png")
+    ggsave(filename = file.path(plot_dir, file_name))
+  }
+
+  return(umap_PLOT)
+}
+
+
+
+add_cluster_ids <- function(sce, k) {
+  sce_tmp <- sce
+  
+  # get meta cluster ids
+  clust_ids <- cluster_ids(sce_tmp, k)
+  
+  # set new column name
+  col_name <- paste0(k, "_cluster_id")
+  
+  # add as new column
+  colData(sce_tmp)[[col_name]] <- clust_ids
+  
+  return(sce_tmp)
+}
+
+
+
+get_clusters_per_sample <- function(sce, k) {
+  # get cluster ids & sample ids
+  clusters <- cluster_ids(sce, k)
+  sample_ids <- colData(sce)$sample_id
+  
+  # set column names
+  cluster_col_name <- paste0(k, "_cluster")
+  
+  # build dataframe
+  df <- as.data.frame(table(sample_id = sample_ids,
+                            cluster = clusters))
+  
+  # rename cluster column
+  colnames(df)[2] <- cluster_col_name
+  
+  # calculate cluster proportion per sample
+  df <- df %>%
+    dplyr::group_by(sample_id) %>%
+    dplyr::mutate(proportion = Freq / sum(Freq)) %>%
+    dplyr::ungroup()
+  
+  return(df)
+}
+
+
+sce_tmp <- sce_ref
+df <- get_clusters_per_sample(sce_tmp, "meta8")
+write.csv(df, file = "meta8_cluster_proportions.csv", row.names = FALSE)
+
+# test pipeline
