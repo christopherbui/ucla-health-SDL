@@ -37,6 +37,7 @@ library(ggplot2)
 library(pheatmap)
 # library(pandoc)   #required by flowAI
 library(cowplot)
+library(matrixStats)
 
 library(flowCore)
 library(flowAI)
@@ -847,8 +848,8 @@ md_info$BATCH <- factor(md_info$BATCH)
 
 # import fcs as sce object (arcsinh, transform = TRUE by default)
 sce <- CATALYST::prepData(fcs_files,
-                          panel = tmp_panel,
-                          md = md_info,
+                          panel = tmp_panel, # panel marker info
+                          md = md_info, # sample info
                           panel_cols = list(channel = "fcs_colname", antigen = "antigen", class = "marker_class"),
                           md_cols = list(file = "file",
                                          id = "sample_id",
@@ -1073,6 +1074,67 @@ plot_DR <- function(sce, dr, color_by, facet_by, save_plots = TRUE, plot_dir = "
 
 
 
+
+
+.dotplot <- function(x, k, 
+                     assay = "exprs", fun = "median", 
+                     scale = TRUE, q = 0.01, 
+                     pal = hcl.colors(11, "viridis")) {
+  
+  x$cluster_id <- cluster_ids(x, k)
+  es <- assay(x, assay)
+  th <- rowMedians(es)
+  
+  cs <- seq_len(ncol(x))
+  cs <- split(cs, x$cluster_id)
+  fq <- sapply(cs, function(i)
+    rowMeans(es[, i, drop = FALSE] > th))
+  
+  # compute median expression by cluster
+  lab <- paste(fun, assay)
+  ms <- CATALYST:::.agg(x, by = "cluster_id", assay = assay, fun = fun)
+  if (scale) {
+    lab <- paste("scaled", lab)
+    ms <- CATALYST:::.scale_exprs(ms, q = q)
+  }
+  
+  # do hierarchical clustering on rows & columns
+  cluster_order <- function(x) order.dendrogram(as.dendrogram(hclust(dist(x))))
+  ro <- colnames(ms)[cluster_order(t(ms))]
+  co <- rownames(ms)[cluster_order(ms)]
+  
+  ms_ordered <- ms[co, ro]
+  fq_ordered <- fq[co, ro]
+  df <- cbind(melt(ms_ordered), fq = melt(fq_ordered)$value)
+  
+  df_wide <- dcast(df, Var1 ~ Var2, value.var = "value")
+  
+  write.table(df, file = paste0("dotplot_", fun, "_expression_matrix.txt"), sep = "\t", quote = FALSE, col.names = NA)
+  write.table(df_wide, file = paste0("dotplot_", fun, "_expression_matrix_wide.txt"), sep = "\t", quote = FALSE, col.names = NA)
+  
+  ggplot(df, aes(Var1, Var2, col = value, size = fq, label = sprintf("%.2f", value))) + 
+    geom_point() +
+    geom_text(color = "black", size = 2.5, vjust = 0.5) +  # show mean/median value
+    scale_x_discrete("marker", limits = co, expand = c(0, 0.5)) +
+    scale_y_discrete("cluster_id", limits = ro, expand = c(0, 0.5)) +
+    scale_color_gradientn(lab, breaks = seq(0, 1, 0.5), colors = pal) +
+    scale_size_continuous(range = c(0, 5), 
+                          labels = formatC(seq(0, 1, 0.25), 2, format = "f")) +
+    guides(
+      color = guide_colorbar(order = 1),
+      size = guide_legend("% cells with expr. above\n global marker median")) +
+    coord_equal() + theme_linedraw() + theme(
+      panel.grid = element_blank(),
+      panel.border = element_blank(),
+      axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+
+
+.dotplot(sce_tmp, k = "meta20", fun = "mean")
+
+
+
 add_cluster_ids <- function(sce, k) {
   sce_tmp <- sce
   
@@ -1115,8 +1177,37 @@ get_clusters_per_sample <- function(sce, k) {
 }
 
 
-sce_tmp <- sce_ref
-df <- get_clusters_per_sample(sce_tmp, "meta8")
-write.csv(df, file = "meta8_cluster_proportions.csv", row.names = FALSE)
+
+get_cluster_mapping <- function(sce, meta = "meta8") {
+  # check input validity
+  if (!"cluster_id" %in% names(colData(sce))) {
+    stop("The SCE object must contain a 'cluster_id' column in colData.")
+  }
+  if (is.null(metadata(sce)$cluster_codes)) {
+    stop("The SCE object does not contain cluster_codes in metadata.")
+  }
+  if (!meta %in% colnames(metadata(sce)$cluster_codes)) {
+    stop(paste0("The metacluster '", meta, "' does not exist."))
+  }
+  
+  # extract mapping between cluster_id and the specified meta cluster
+  mapping <- metadata(sce)$cluster_codes[, c("som100", meta)]
+  colnames(mapping) <- c("cluster_id", meta)
+  
+  # format as data frame
+  df <- as.data.frame(mapping)
+  
+  # sort by meta cluster
+  df <- df[order(df[[meta]]), ]
+  return(df)
+}
+
+
+
+df_clusters_per_sample <- get_clusters_per_sample(sce_tmp, "meta20")
+write.table(df_clusters_per_sample, "meta20_cluster_proportions.txt", sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
+
+df_cluster_map <- get_cluster_mapping(sce_tmp, "meta20")
+write.table(df_cluster_map, "meta20_cluster_mapping.txt", sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
 # test pipeline
