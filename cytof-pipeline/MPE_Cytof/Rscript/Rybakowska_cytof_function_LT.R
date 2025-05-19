@@ -577,6 +577,7 @@ gate_live_cells_4SDL <- function(flow_frame,
 }
 
 
+
 remove_mad_outliers_4SDL <- function(flow_frame, 
                                 channels = "Event_length", 
                                 n_mad = 2,
@@ -644,6 +645,7 @@ remove_mad_outliers_4SDL <- function(flow_frame,
   # return(selection)
   return(list(selection = selection, info_df = df_boundaries))
 }
+
 
 
 gate_singlet_cells_4SDL <- function(flow_frame, 
@@ -716,50 +718,7 @@ reloadProgressBar <- function(iterations) {
 
 
 
-plot_explore_markers <- function(sce, color_by = "BATCH", label_by = "sample_id", scale = "last", row_anno = FALSE, col_anno = FALSE, save_plots = TRUE, plot_dir = "Plots") {
-  # plot distribution of all markers across batches
-  marker_dist_PLOT <- plotExprs(sce,
-                                color_by = color_by)
-
-  # plot pseudobulk-level multi-dimensional scaling of median marker intensities
-  pb_mds_PLOT <- pbMDS(sce,
-                       color_by = color_by,
-                       label_by = label_by)
-
-  # heatmap of median marker intensities for all markers
-  marker_heatmap_PLOT <- plotExprHeatmap(sce,
-                                         scale = scale,
-                                         row_anno = row_anno,
-                                         col_anno = col_anno)
-  
-  # save plots
-  if (save_plots) {
-
-    if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
-
-    file_name <- paste0("marker_distribution_by_", color_by, ".png")
-    ggsave(filename = file.path(plot_dir, file_name),
-           plot = marker_dist_PLOT, width = 10, height = 6)
-
-    file_name <- paste0("pbMDS_by_", color_by, "_", label_by, ".png")
-    ggsave(filename = file.path(plot_dir, file_name),
-           plot = pb_mds_PLOT, width = 8, height = 6)
-
-    file_name <- paste0("expr_heatmap_all_markers.png")
-    ggsave(filename = file.path(plot_dir, file_name),
-           plot = marker_heatmap_PLOT, width = 10, height = 8)
-  }
-
-  return(list(
-    marker_dist_PLOT,
-    pb_mds_PLOT,
-    marker_heatmap_PLOT
-  ))
-}
-
-
-
-plot_fsom_heatmap <- function(sce, features, by = "cluster_id", k = "meta8", scale = "last", bars = TRUE, perc = TRUE, save_plots = TRUE, plot_dir = "Plots", ...) {
+plot_fsom_heatmap <- function(sce, features, by = "cluster_id", k = "meta8", scale = "last", bars = TRUE, perc = TRUE, save_plots = TRUE, plot_dir = "Plots", width = 10, height = 8, ...) {
 
   fsom_heatmap_PLOT <- plotExprHeatmap(sce,
                                        features = features,
@@ -774,7 +733,7 @@ plot_fsom_heatmap <- function(sce, features, by = "cluster_id", k = "meta8", sca
 
     file_name <- paste0("fsom_expr_heatmap_", by, "_", k, ".png")
     ggsave(filename = file.path(plot_dir, file_name),
-           plot = fsom_heatmap_PLOT, width = 10, height = 8)
+           plot = fsom_heatmap_PLOT, width = width, height = height)
   }
 
   return(fsom_heatmap_PLOT)
@@ -852,22 +811,22 @@ plot_DR <- function(sce, dr = "UMAP", color_by, save_plots = TRUE, plot_dir = "P
 #'
 #' @examples
 dotplot <- function(sce,
-                    k, 
+                    k,
                     assay = "exprs",
-                    fun = "median", 
+                    fun = "median",
                     scale = TRUE,
-                    q = 0.01, 
+                    q = 0.01,
                     pal = hcl.colors(11, "viridis")) {
-  
+
   sce$cluster_id <- cluster_ids(sce, k)
-  es <- assay(sce, assay)
+  es <- assay(sce, assay)   # expression matrix
   th <- rowMedians(es)
-  
+
   cs <- seq_len(ncol(sce))
   cs <- split(cs, sce$cluster_id)
   fq <- sapply(cs, function(i)
     rowMeans(es[, i, drop = FALSE] > th))
-  
+
   # compute median expression by cluster
   lab <- paste(fun, assay)
   ms <- CATALYST:::.agg(sce, by = "cluster_id", assay = assay, fun = fun)
@@ -875,37 +834,55 @@ dotplot <- function(sce,
     lab <- paste("scaled", lab)
     ms <- CATALYST:::.scale_exprs(ms, q = q)
   }
-  
+
   # do hierarchical clustering on rows & columns
   cluster_order <- function(x) order.dendrogram(as.dendrogram(hclust(dist(x))))
   ro <- colnames(ms)[cluster_order(t(ms))]
   co <- rownames(ms)[cluster_order(ms)]
-  
+
   ms_ordered <- ms[co, ro]
   fq_ordered <- fq[co, ro]
   df <- cbind(melt(ms_ordered), fq = melt(fq_ordered)$value)
-  
+
   df_wide <- dcast(df, Var1 ~ Var2, value.var = "value")
-  
-  write.table(df, file = paste0("dotplot_", fun, "_expression_matrix.txt"), sep = "\t", quote = FALSE, col.names = NA)
-  write.table(df_wide, file = paste0("dotplot_", fun, "_expression_matrix_wide.txt"), sep = "\t", quote = FALSE, col.names = NA)
-  
-  ggplot(df, aes(Var1, Var2, col = value, size = fq, label = sprintf("%.2f", value))) + 
+
+  # write.table(df, file = paste0("dotplot_", fun, "_expression_matrix.txt"), sep = "\t", quote = FALSE, col.names = NA)
+  # write.table(df_wide, file = paste0("dotplot_", fun, "_expression_matrix_wide.txt"), sep = "\t", quote = FALSE, col.names = NA)
+
+  # Write the *raw* (unclustered) matrix
+  df_raw <- cbind(melt(ms), fq = melt(fq)$value)
+  df_raw_wide <- dcast(df_raw, Var1 ~ Var2, value.var = "value")
+
+  write.table(df_raw, file = paste0("dotplot_", fun, "_expression_matrix.txt"), sep = "\t", quote = FALSE, col.names = NA)
+
+  write.table(df_raw_wide, file = paste0("dotplot_", fun, "_expression_matrix_wide.txt"), sep = "\t", quote = FALSE, col.names = NA)
+
+
+  dot_PLOT <- ggplot(df, aes(Var1, Var2, col = value, size = fq, label = sprintf("%.2f", value))) +
     geom_point() +
     geom_text(color = "black", size = 2.5, vjust = 0.5) +  # show mean/median value
     scale_x_discrete("marker", limits = co, expand = c(0, 0.5)) +
     scale_y_discrete("cluster_id", limits = ro, expand = c(0, 0.5)) +
     scale_color_gradientn(lab, breaks = seq(0, 1, 0.5), colors = pal) +
-    scale_size_continuous(range = c(0, 5), 
-                          labels = formatC(seq(0, 1, 0.25), 2, format = "f")) +
+    scale_size_continuous(
+      range = c(0, 5),
+      labels = formatC(seq(0, 1, 0.25), 2, format = "f")
+    ) +
     guides(
       color = guide_colorbar(order = 1),
-      size = guide_legend("% cells with expr. above\n global marker median")) +
-    coord_equal() + theme_linedraw() + theme(
+      size = guide_legend("% cells with expr. above\n global marker median")
+    ) +
+    coord_equal() +
+    theme_linedraw() +
+    theme(
       panel.grid = element_blank(),
       panel.border = element_blank(),
-      axis.text.x = element_text(angle = 45, hjust = 1))
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+
+  return(dot_PLOT)
 }
+
 
 
 
@@ -926,7 +903,7 @@ add_cluster_ids <- function(sce, k) {
 
 
 
-get_clusters_per_sample <- function(sce, k) {
+get_cluster_prop_by_sample <- function(sce, k) {
   # get cluster ids & sample ids
   clusters <- cluster_ids(sce, k)
   sample_ids <- colData(sce)$sample_id
