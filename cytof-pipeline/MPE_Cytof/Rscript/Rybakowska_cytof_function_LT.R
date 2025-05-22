@@ -718,84 +718,6 @@ reloadProgressBar <- function(iterations) {
 
 
 
-plot_fsom_heatmap <- function(sce, features, by = "cluster_id", k = "meta8", scale = "last", bars = TRUE, perc = TRUE, save_plots = TRUE, plot_dir = "Plots", width = 10, height = 8, ...) {
-
-  fsom_heatmap_PLOT <- plotExprHeatmap(sce,
-                                       features = features,
-                                       by = by,
-                                       k = k,
-                                       scale = scale,
-                                       bars = TRUE,
-                                       perc = TRUE,
-                                       ...)
-  if (save_plots) {
-    if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
-
-    file_name <- paste0("fsom_expr_heatmap_", by, "_", k, ".png")
-    ggsave(filename = file.path(plot_dir, file_name),
-           plot = fsom_heatmap_PLOT, width = width, height = height)
-  }
-
-  return(fsom_heatmap_PLOT)
-}
-
-
-
-plot_pb_exprs <- function(sce, k = "meta8", features, color_by, facet_by, ncol = 4, save_plots = TRUE, plot_dir = "Plots", ...) {
-  
-  pb_PLOT <- plotPbExprs(sce,
-                         k = k,
-                         features = features,
-                         color_by = color_by,
-                         facet_by = facet_by,
-                         ncol = ncol,
-                         ...)
-  if (save_plots) {
-    if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
-
-    file_name <- paste0("pb_expr_by_", k, "_", color_by, "_", facet_by, ".png")
-    ggsave(filename = file.path(plot_dir, file_name),
-           plot = pb_PLOT)
-  }
-
-  return(pb_PLOT)
-}
-
-
-
-
-#' Title
-#'
-#' @param sce 
-#' @param dr 
-#' @param color_by 
-#' @param save_plots 
-#' @param plot_dir 
-#' @param ... 
-#'
-#' @returns
-#' @export
-#'
-#' @examples
-plot_DR <- function(sce, dr = "UMAP", color_by, save_plots = TRUE, plot_dir = "Plots", ...) {
-
-  umap_PLOT <- plotDR(sce,
-                      dr = dr,
-                      color_by = color_by,
-                      ...)
-  if (save_plots) {
-    if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
-    
-    file_name <- paste0(dr, "_by_", color_by, "_", facet_by, ".png")
-    ggsave(filename = file.path(plot_dir, file_name))
-  }
-
-  return(umap_PLOT)
-}
-
-
-
-
 #' Title
 #'
 #' @param sce 
@@ -816,7 +738,8 @@ dotplot <- function(sce,
                     fun = "median",
                     scale = TRUE,
                     q = 0.01,
-                    pal = hcl.colors(11, "viridis")) {
+                    pal = hcl.colors(11, "viridis"),
+                    output_dir = NULL) {
 
   sce$cluster_id <- cluster_ids(sce, k)
   es <- assay(sce, assay)   # expression matrix
@@ -853,14 +776,14 @@ dotplot <- function(sce,
   df_raw <- cbind(melt(ms), fq = melt(fq)$value)
   df_raw_wide <- dcast(df_raw, Var1 ~ Var2, value.var = "value")
 
-  write.table(df_raw, file = paste0("dotplot_", fun, "_expression_matrix.txt"), sep = "\t", quote = FALSE, col.names = NA)
+  write.table(df_raw, file = file.path(output_dir, paste0("dotplot_", fun, "_expression_matrix.txt")), sep = "\t", quote = FALSE, col.names = NA)
 
-  write.table(df_raw_wide, file = paste0("dotplot_", fun, "_expression_matrix_wide.txt"), sep = "\t", quote = FALSE, col.names = NA)
+  write.table(df_raw_wide, file = file.path(output_dir, paste0("dotplot_", fun, "_expression_matrix_wide.txt")), sep = "\t", quote = FALSE, col.names = NA)
 
 
   dot_PLOT <- ggplot(df, aes(Var1, Var2, col = value, size = fq, label = sprintf("%.2f", value))) +
     geom_point() +
-    geom_text(color = "black", size = 2.5, vjust = 0.5) +  # show mean/median value
+    # geom_text(color = "black", size = 2.5, vjust = 0.5) +  # show mean/median value
     scale_x_discrete("marker", limits = co, expand = c(0, 0.5)) +
     scale_y_discrete("cluster_id", limits = ro, expand = c(0, 0.5)) +
     scale_color_gradientn(lab, breaks = seq(0, 1, 0.5), colors = pal) +
@@ -952,3 +875,46 @@ get_cluster_mapping <- function(sce, meta = "meta8") {
   df <- df[order(df[[meta]]), ]
   return(df)
 }
+
+
+
+
+
+analysis_pipeline <- function(sce, output_dir) {
+  
+  # plot distribution of markers
+  # sce_ref <- sce[, sce$sample_id %in% ref_sam[2]] # selects only batch 2
+  color_by <- "BATCH"
+  
+  marker_dist_PLOT <- plotExprs(sce_ref, color_by = color_by)
+  
+  file_name <- paste0("Ref_marker_distribution_by_", color_by, ".png")
+  ggsave(filename = file.path(analysis_ref_dir, file_name), plot = marker_dist_PLOT, width = 10, height = 7)
+  
+  
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
