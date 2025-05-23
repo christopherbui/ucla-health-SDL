@@ -806,7 +806,7 @@ analysis_dir <- file.path(workFolder, "CYTOF_data", "Analysis", selPanel)
 if (!dir.exists(analysis_dir)) dir.create(analysis_dir, recursive = TRUE)
 
 # set output directory for reference file analysis
-analysis_ref_dir <- file.path(analysis_dir, "RefFiles")
+analysis_ref_dir <- file.path(analysis_dir, "Res_Ref")
 if (!dir.exists(analysis_ref_dir)) dir.create(analysis_ref_dir)
 
 # get fcs files
@@ -892,7 +892,6 @@ colData(sce_ref)$sample_id <- droplevels(colData(sce_ref)$sample_id)
 # plot distribution of markers
 # sce_ref <- sce[, sce$sample_id %in% ref_sam[2]] # selects only batch 2
 color_by <- "BATCH"
-
 marker_dist_PLOT <- plotExprs(sce_ref, color_by = color_by)
 
 file_name <- paste0("Ref_marker_distribution_by_", color_by, ".png")
@@ -903,7 +902,6 @@ ggsave(filename = file.path(analysis_ref_dir, file_name), plot = marker_dist_PLO
 # plot mulit-dimension scale (median marker intensities)
 color_by <- "BATCH"
 label_by <- "sample_id"
-
 pb_mds_PLOT <- pbMDS(sce_ref, color_by = color_by, label_by = label_by)
 
 file_name <- paste0("Ref_pbMDS_by_", color_by, "_", label_by, ".png")
@@ -966,7 +964,6 @@ set.seed(1234)
 
 # UMAP
 sce_ref <- runDR(sce_ref, "UMAP", cells = 1e3, features = "type")
-
 marker <- "CD4"
 umap_PLOT <- plotDR(sce_ref, "UMAP", color_by = marker)
 
@@ -974,28 +971,28 @@ file_name <- paste0("Ref_UMAP", "_color_by_", marker, ".png")
 ggsave(filename = file.path(analysis_ref_dir, file_name), plot = umap_PLOT, width = 10, height = 10, bg = "white")
 
 
-# dotplot marker expression
-sce_tmp <- sce_ref
 
+
+# dotplot marker expression
 k <- "meta20"
 fun <- "mean"
-dot_PLOT <- dotplot(sce_tmp, k = k, fun = fun)
+dot_PLOT <- dotplot(sce_ref, k = k, fun = fun, output_dir = analysis_ref_dir)
   
 file_name <- paste0("Ref_dotplot_", fun, "_", k, ".png")
-ggsave(filename = file.path(analysis_ref_dir, file_name), plot = dot_PLOT, width = 11, height = 8)
+ggsave(filename = file.path(analysis_ref_dir, file_name), plot = dot_PLOT, width = 12, height = 8)
 
 
 
 # analyze cluster proportion by sample
 k <- "meta20"
-df_clusters_per_sample <- get_cluster_prop_by_sample(sce_tmp, k)
+df_clusters_per_sample <- get_cluster_prop_within_sample(sce_ref, k)
 
-file_name <- paste0(k, "_cluster_proportion_by_sample.txt")
+file_name <- paste0(k, "_cluster_proportion_within_sample.txt")
 write.table(df_clusters_per_sample, file.path(analysis_ref_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
 # track FSOM cluster & meta cluster grouping
 k <- "meta20"
-df_cluster_map <- get_cluster_mapping(sce_tmp, k)
+df_cluster_map <- get_cluster_mapping(sce_ref, k)
 
 file_name <- paste0(k, "_cluster_mapping.txt")
 write.table(df_cluster_map, file.path(analysis_ref_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
@@ -1151,9 +1148,9 @@ ggsave(filename = file.path(analysis_dir, file_name), plot = dot_PLOT, width = 1
 
 # analyze cluster proportion by sample
 k <- "meta20"
-df_clusters_per_sample <- get_cluster_prop_by_sample(sce, k)
+df_clusters_per_sample <- get_cluster_prop_within_sample(sce, k)
 
-file_name <- paste0(k, "_cluster_proportion_by_sample.txt")
+file_name <- paste0(k, "_cluster_proportion_within_sample.txt")
 write.table(df_clusters_per_sample, file.path(analysis_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
 
@@ -1324,9 +1321,9 @@ ggsave(filename = file.path(res_dir, file_name), plot = dot_PLOT, width = 12, he
 
 # analyze cluster proportion by sample
 k <- "meta20"
-df_clusters_per_sample <- get_cluster_prop_by_sample(sce, k)
+df_clusters_per_sample <- get_cluster_prop_within_sample(sce, k)
 
-file_name <- paste0(k, "_cluster_proportion_by_sample.txt")
+file_name <- paste0(k, "_cluster_proportion_within_sample.txt")
 write.table(df_clusters_per_sample, file.path(res_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
 

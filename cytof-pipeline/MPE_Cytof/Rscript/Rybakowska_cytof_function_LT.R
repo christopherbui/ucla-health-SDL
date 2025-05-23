@@ -783,7 +783,7 @@ dotplot <- function(sce,
 
   dot_PLOT <- ggplot(df, aes(Var1, Var2, col = value, size = fq, label = sprintf("%.2f", value))) +
     geom_point() +
-    # geom_text(color = "black", size = 2.5, vjust = 0.5) +  # show mean/median value
+    # geom_text(color = "black", size = 2.5, vjust = 0.5) +  # show mean/median value; comment out line if desired
     scale_x_discrete("marker", limits = co, expand = c(0, 0.5)) +
     scale_y_discrete("cluster_id", limits = ro, expand = c(0, 0.5)) +
     scale_color_gradientn(lab, breaks = seq(0, 1, 0.5), colors = pal) +
@@ -826,7 +826,7 @@ add_cluster_ids <- function(sce, k) {
 
 
 
-get_cluster_prop_by_sample <- function(sce, k) {
+get_cluster_prop_within_sample <- function(sce, k) {
   # get cluster ids & sample ids
   clusters <- cluster_ids(sce, k)
   sample_ids <- colData(sce)$sample_id
