@@ -776,9 +776,9 @@ allSampleInfo <- read.delim(fin_info, sep = "\t", header = TRUE, stringsAsFactor
 allSampleInfo <- allSampleInfo[, -1]
 
 # select panel
-# selPanel <- c("TBNK")
+selPanel <- c("TBNK")
 # selPanel <- c("Myeloid")
-selPanel <- c("Cytokines")
+# selPanel <- c("Cytokines")
 
 # get panel info
 fin_panel <- paste(selPanel, "_markers_022625.txt", sep="")
@@ -969,6 +969,14 @@ umap_PLOT <- plotDR(sce_ref, "UMAP", color_by = marker)
 
 file_name <- paste0("Ref_UMAP", "_color_by_", marker, ".png")
 ggsave(filename = file.path(analysis_ref_dir, file_name), plot = umap_PLOT, width = 10, height = 10, bg = "white")
+
+
+
+
+# add meta cluster id as new column
+# k <- "meta20"
+# sce_ref$meta20 <- cluster_ids(sce_ref, k = k)
+# avg_expr <- CATALYST:::.agg(sce_ref, by = k, fun = "mean")
 
 
 
@@ -1333,3 +1341,166 @@ df_cluster_map <- get_cluster_mapping(sce, k)
 
 file_name <- paste0(k, "_cluster_mapping.txt")
 write.table(df_cluster_map, file.path(res_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
+
+
+
+
+################################################################################
+# ANALYSIS - DIFFERENTIAL ANALYSIS
+################################################################################
+
+# get sample info
+fin_info <- file.path("Ranalysis","mpe_cytof_sampleInfo_022625.txt")
+allSampleInfo <- read.delim(fin_info, sep = "\t", header = TRUE, stringsAsFactors = FALSE)
+allSampleInfo <- allSampleInfo[, -1]
+
+# select panel
+# selPanel <- c("TBNK")
+selPanel <- c("Myeloid")
+# selPanel <- c("Cytokines")
+
+# get panel info
+fin_panel <- paste(selPanel, "_markers_022625.txt", sep="")
+panel_info <- read.delim(file.path("Ranalysis", fin_panel), sep = "\t", header = TRUE, stringsAsFactors = FALSE)
+
+# get channel info for fsom
+lineage_idx <- which(panel_info$marker_class == "lineage")
+lineage_markers <- panel_info$fcs_desc[lineage_idx]
+function_idx <- which(panel_info$marker_class == "function")
+function_markers <- panel_info$fcs_desc[function_idx]
+
+# set panel input for CATALYST, requires 3 columns
+tmp_panel <- panel_info[, c("fcs_colname", "antigen", "marker_class")]
+tmpi <- which(grepl("function", panel_info$marker_class) == TRUE)
+tmp_panel$marker_class[tmpi] <- c("state")
+tmpi <- which(panel_info$marker_class == "lineage")
+tmp_panel$marker_class[tmpi] <- c("type")
+
+# set input directory
+norm_dir <- file.path(workFolder, "CYTOF_data", "CytoNormed", selPanel, "updateFileName")
+
+# set parent output directory
+analysis_dir <- file.path(workFolder, "CYTOF_data", "Analysis", selPanel)
+if (!dir.exists(analysis_dir)) dir.create(analysis_dir, recursive = TRUE)
+
+# get fcs files
+fcs_files <- list.files(norm_dir,
+                        pattern = ".fcs$",
+                        full.names = TRUE)
+
+# get fcs corename
+tmp_core <- sapply(basename(fcs_files), getCoreID, simplify = TRUE)
+
+# match filenames and metadata
+# prepare metadata for CATALYST
+sampleInfo <- dplyr::filter(allSampleInfo, panel_id == selPanel)
+md_info <- left_join(data.frame(file = basename(fcs_files), sample_id = tmp_core),
+                     sampleInfo[, -1],
+                     by = join_by(sample_id == corename))
+
+md_info$BATCH <- factor(md_info$BATCH)
+
+# import fcs as sce object (arcsinh, transform = TRUE by default)
+sce <- CATALYST::prepData(fcs_files,
+                          panel = tmp_panel, # panel marker info
+                          md = md_info, # sample info
+                          panel_cols = list(channel = "fcs_colname", antigen = "antigen", class = "marker_class"),
+                          md_cols = list(file = "file", id = "sample_id", factors = c("tissue_type", "patient_id", "parental_sample_id", "BATCH")))
+
+SummarizedExperiment(sce)
+
+colData(sce)$sample_id <- droplevels(colData(sce)$sample_id)
+
+
+
+
+# FlowSOM
+set.seed(1234)
+
+
+# set output directory for analysis
+res_dir <- file.path(analysis_dir, paste0("TBNK_Myeloid_Common_Markers"))   # CHANGE AS SUITED
+if (!dir.exists(res_dir)) dir.create(res_dir, recursive = TRUE)
+
+
+# common lineage markers; TBNK & MYELOID
+features <- c("CD16", "CD45", "CD70")
+
+sce <- cluster(sce,
+               features = features,
+               xdim = 10,
+               ydim = 10,
+               maxK = 20,
+               seed = 1234)
+
+k <- "meta3"
+# k <- "meta6"
+# k <- "meta8"
+# k <- "meta10"
+# k <- "meta20"
+
+marker_heatmap_PLOT <- plotExprHeatmap(sce,
+                                       scale = "last",
+                                       features = features,
+                                       row_anno = FALSE,
+                                       col_anno = FALSE)
+
+file_name <- paste0("expr_heatmap_all_markers", ".png")
+png(file.path(res_dir, file_name), width = 18, height = 12, units = "in", res = 300)
+draw(marker_heatmap_PLOT, heatmap_legend_side = "bottom", padding = unit(c(10, 10, 10, 20), "mm"))
+dev.off()
+
+cluster_marker_heatmap <- plotExprHeatmap(sce,
+                                          features = features,
+                                          by = "cluster_id",
+                                          k = k,
+                                          bars = TRUE,
+                                          perc = TRUE)
+
+
+file_name <- paste0(k, "_expr_heatmap_clusters", ".png")
+png(file.path(res_dir, file_name), width = 12, height = 8, units = "in", res = 300)
+draw(cluster_marker_heatmap)
+dev.off()
+
+
+
+# UMAP
+
+# lineage markers
+sce <- runDR(sce, "UMAP", cells = 1e3, features = features)
+
+sce$meta8 <- cluster_ids(sce, "meta8")
+
+umap_PLOT <- plotDR(sce, "UMAP", color_by = "meta8", facet_by = "meta8")
+file_name <- paste0("UMAP_tmp.png")
+ggsave(filename = file.path(res_dir, file_name), plot = umap_PLOT, width = 10, height = 10, bg = "white")
+
+
+
+marker <- "CD16" # CHANGE AS SUITED
+
+umap_PLOT <- plotDR(sce, "UMAP", color_by = marker)
+file_name <- paste0("UMAP", "_color_by_", marker, ".png")
+ggsave(filename = file.path(res_dir, file_name), plot = umap_PLOT, width = 10, height = 10, bg = "white")
+
+
+
+facet_by = "sample_id"
+
+umap_PLOT_marker_facet <- plotDR(sce, "UMAP", color_by = marker, facet_by = facet_by)
+file_name <- paste0("UMAP", "_color_by_", marker, "_facet_by_", facet_by, ".png")
+ggsave(filename = file.path(res_dir, file_name), plot = umap_PLOT_marker_facet, width = 20, height = 20, bg = "white")
+
+
+umap_PLOT_clust_facet <- plotDR(sce, "UMAP", color_by = k, facet_by = facet_by)
+file_name <- paste0("UMAP", "_color_by_", k, "_facet_by_", facet_by, ".png")
+ggsave(filename = file.path(res_dir, file_name), plot = umap_PLOT_clust_facet, width = 20, height = 20, bg = "white")
+
+
+
+# codes of clusters
+names(cluster_codes(sce))
+# access specific clustering resolution i.e. cellIDS
+table(cluster_ids(sce, "som100"))
+table(cluster_ids(sce, "meta20"))

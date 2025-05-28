@@ -700,6 +700,20 @@ gate_singlet_cells_4SDL <- function(flow_frame,
 
 
 
+
+
+
+# extract sample info from fcs files
+getCoreID <- function(x) {
+  xlist <- unlist(strsplit(x, split = "_"))[1:4]
+  xcore <- paste0(xlist, collapse = "_")
+}
+
+
+
+
+
+
 #' Title
 #'
 #' @param iterations 
@@ -715,6 +729,9 @@ reloadProgressBar <- function(iterations) {
   )
   return(pb)
 }
+
+
+
 
 
 
