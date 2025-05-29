@@ -793,9 +793,9 @@ dotplot <- function(sce,
   df_raw <- cbind(melt(ms), fq = melt(fq)$value)
   df_raw_wide <- dcast(df_raw, Var1 ~ Var2, value.var = "value")
 
-  write.table(df_raw, file = file.path(output_dir, paste0("dotplot_", fun, "_expression_matrix.txt")), sep = "\t", quote = FALSE, col.names = NA)
+  write.table(df_raw, file = file.path(output_dir, paste0(k, "dotplot_", fun, "_expression_matrix.txt")), sep = "\t", quote = FALSE, col.names = NA)
 
-  write.table(df_raw_wide, file = file.path(output_dir, paste0("dotplot_", fun, "_expression_matrix_wide.txt")), sep = "\t", quote = FALSE, col.names = NA)
+  write.table(df_raw_wide, file = file.path(output_dir, paste0(k, "dotplot_", fun, "_expression_matrix_wide.txt")), sep = "\t", quote = FALSE, col.names = NA)
 
 
   dot_PLOT <- ggplot(df, aes(Var1, Var2, col = value, size = fq, label = sprintf("%.2f", value))) +
@@ -826,23 +826,6 @@ dotplot <- function(sce,
 
 
 
-add_cluster_ids <- function(sce, k) {
-  sce_tmp <- sce
-  
-  # get meta cluster ids
-  clust_ids <- cluster_ids(sce_tmp, k)
-  
-  # set new column name
-  col_name <- paste0(k, "_cluster_id")
-  
-  # add as new column
-  colData(sce_tmp)[[col_name]] <- clust_ids
-  
-  return(sce_tmp)
-}
-
-
-
 get_cluster_prop_within_sample <- function(sce, k) {
   # get cluster ids & sample ids
   clusters <- cluster_ids(sce, k)
@@ -869,47 +852,34 @@ get_cluster_prop_within_sample <- function(sce, k) {
 
 
 
-get_cluster_mapping <- function(sce, meta = "meta8") {
-  # check input validity
+get_cluster_mapping <- function(sce, meta_vec = c("meta8", "meta10", "meta20")) {
+  # Validate inputs
   if (!"cluster_id" %in% names(colData(sce))) {
     stop("The SCE object must contain a 'cluster_id' column in colData.")
   }
   if (is.null(metadata(sce)$cluster_codes)) {
     stop("The SCE object does not contain cluster_codes in metadata.")
   }
-  if (!meta %in% colnames(metadata(sce)$cluster_codes)) {
-    stop(paste0("The metacluster '", meta, "' does not exist."))
+  
+  cluster_codes <- metadata(sce)$cluster_codes
+  
+  # Ensure all meta columns exist
+  missing_metas <- setdiff(meta_vec, colnames(cluster_codes))
+  if (length(missing_metas) > 0) {
+    stop(paste("The following metaclusters do not exist:", paste(missing_metas, collapse = ", ")))
   }
   
-  # extract mapping between cluster_id and the specified meta cluster
-  mapping <- metadata(sce)$cluster_codes[, c("som100", meta)]
-  colnames(mapping) <- c("cluster_id", meta)
+  # Extract columns
+  mapping <- cluster_codes[, c("som100", meta_vec), drop = FALSE]
+  colnames(mapping)[1] <- "cluster_id"
   
-  # format as data frame
-  df <- as.data.frame(mapping)
+  # Sort by cluster_id
+  mapping$cluster_id <- as.integer(as.character(mapping$cluster_id))
+  mapping <- mapping[order(mapping$cluster_id), ]
   
-  # sort by meta cluster
-  df <- df[order(df[[meta]]), ]
-  return(df)
+  return(as.data.frame(mapping))
 }
 
-
-
-
-
-analysis_pipeline <- function(sce, output_dir) {
-  
-  # plot distribution of markers
-  # sce_ref <- sce[, sce$sample_id %in% ref_sam[2]] # selects only batch 2
-  color_by <- "BATCH"
-  
-  marker_dist_PLOT <- plotExprs(sce_ref, color_by = color_by)
-  
-  file_name <- paste0("Ref_marker_distribution_by_", color_by, ".png")
-  ggsave(filename = file.path(analysis_ref_dir, file_name), plot = marker_dist_PLOT, width = 10, height = 7)
-  
-  
-}
 
 
 
