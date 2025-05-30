@@ -1176,8 +1176,8 @@ write.table(df_cluster_map, file.path(analysis_dir, file_name), sep = "\t", quot
 ################################################################################
 
 # select panel
-# selPanel <- c("TBNK")
-selPanel <- c("Myeloid")
+selPanel <- c("TBNK")
+# selPanel <- c("Myeloid")
 # selPanel <- c("Cytokines")
 
 # select tissue type
@@ -1425,7 +1425,6 @@ sce <- sce[type_markers, ]
 
 
 
-
 marker_heatmap_PLOT <- plotExprHeatmap(sce,
                                        scale = "last",
                                        row_anno = FALSE,
@@ -1458,7 +1457,7 @@ sce$meta15 <- cluster_ids(sce, "meta15")
 sce$meta20 <- cluster_ids(sce, "meta20")
 
 
-k <- "meta8"   # meta8, meta10, meta15, meta20
+k <- "meta20"   # meta8, meta10, meta15, meta20
 cluster_marker_heatmap <- plotExprHeatmap(sce,
                                           features = type_markers,
                                           by = "cluster_id",
@@ -1475,7 +1474,7 @@ dev.off()
 
 # export matrices
 
-k <- "meta20"   # cluster_id (100 clusters), meta8, meta10, meta15, meta20
+k <- "cluster_id"   # cluster_id (100 clusters), meta8, meta10, meta15, meta20
 fun <- "mean"   # mean, median
 raw_clust_expr <- CATALYST:::.agg(sce, by = k, assay = "exprs", fun = fun)
 raw_clust_expr_df <- as.data.frame(raw_clust_expr)
@@ -1537,17 +1536,19 @@ file_name <- paste0("UMAP_", k, ".png")
 ggsave(filename = file.path(umap_dir, file_name), plot = umap_PLOT, width = 10, height = 10, bg = "white")
 
 umap_facet_PLOT <- plotDR(sce, "UMAP", color_by = k, facet_by = k)
-file_name <- paste0("UMAP_", k, "_facet", ".png")
+file_name <- paste0("UMAP_", k, "_facet_by_cluster", ".png")
 ggsave(filename = file.path(umap_dir, file_name), plot = umap_facet_PLOT, width = 12, height = 10, bg = "white")
 
-
+umap_facet_sample_PLOT <- plotDR(sce, "UMAP", color_by = k, facet_by = "sample_id")
+file_name <- paste0("UMAP_", k, "_facet_by_sample_id", ".png")
+ggsave(filename = file.path(umap_dir, file_name), plot = umap_facet_sample_PLOT, width = 20, height = 20, bg = "white")
 
 
 # dotplot marker expression
 dotplot_dir <- file.path(res_dir, "Dotplot")
 if (!dir.exists(dotplot_dir)) dir.create(dotplot_dir, recursive = TRUE)
 
-k <- "meta8"
+k <- "meta20"
 fun <- "mean"
 dot_PLOT <- dotplot(sce, k = k, fun = fun, output_dir = dotplot_dir)
 
@@ -1561,7 +1562,7 @@ ggsave(filename = file.path(dotplot_dir, file_name), plot = dot_PLOT, width = 10
 cluster_info_dir <- file.path(res_dir, "Cluster_Info")
 if (!dir.exists(cluster_info_dir)) dir.create(cluster_info_dir, recursive = TRUE)
 
-k <- "meta8"
+k <- "meta20"
 df_clusters_per_sample <- get_cluster_prop_within_sample(sce, k)
 
 file_name <- paste0(k, "_cluster_proportion_within_sample.txt")
