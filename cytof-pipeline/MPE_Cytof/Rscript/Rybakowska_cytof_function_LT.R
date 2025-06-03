@@ -774,6 +774,8 @@ dotplot <- function(sce,
     lab <- paste("scaled", lab)
     ms <- CATALYST:::.scale_exprs(ms, q = q)
   }
+  
+  cluster_ids_actual <- colnames(ms)
 
   # do hierarchical clustering on rows & columns
   cluster_order <- function(x) order.dendrogram(as.dendrogram(hclust(dist(x))))
@@ -791,11 +793,15 @@ dotplot <- function(sce,
 
   # Write the *raw* (unclustered) matrix
   df_raw <- cbind(melt(ms), fq = melt(fq)$value)
+  
+  # Ensure Var2 (cluster column) is a factor with levels == actual cluster IDs
+  df_raw$Var2 <- factor(df_raw$Var2, levels = cluster_ids_actual)
+  
   df_raw_wide <- dcast(df_raw, Var1 ~ Var2, value.var = "value")
 
-  write.table(df_raw, file = file.path(output_dir, paste0(k, "dotplot_", fun, "_expression_matrix.txt")), sep = "\t", quote = FALSE, col.names = NA)
+  write.table(df_raw, file = file.path(output_dir, paste0(k, "_dotplot_", fun, "_expression_matrix.txt")), sep = "\t", quote = FALSE, col.names = NA)
 
-  write.table(df_raw_wide, file = file.path(output_dir, paste0(k, "dotplot_", fun, "_expression_matrix_wide.txt")), sep = "\t", quote = FALSE, col.names = NA)
+  write.table(df_raw_wide, file = file.path(output_dir, paste0(k, "_dotplot_", fun, "_expression_matrix_wide.txt")), sep = "\t", quote = FALSE, col.names = NA)
 
 
   dot_PLOT <- ggplot(df, aes(Var1, Var2, col = value, size = fq, label = sprintf("%.2f", value))) +
@@ -819,8 +825,30 @@ dotplot <- function(sce,
       panel.border = element_blank(),
       axis.text.x = element_text(angle = 45, hjust = 1)
     )
+  
+  dot_PLOT_VALUES <- ggplot(df, aes(Var1, Var2, col = value, size = fq, label = sprintf("%.2f", value))) +
+    geom_point() +
+    geom_text(color = "black", size = 2.5, vjust = 0.5) +  # show mean/median value; comment out line if desired
+    scale_x_discrete("marker", limits = co, expand = c(0, 0.5)) +
+    scale_y_discrete("cluster_id", limits = ro, expand = c(0, 0.5)) +
+    scale_color_gradientn(lab, breaks = seq(0, 1, 0.5), colors = pal) +
+    scale_size_continuous(
+      range = c(0, 5),
+      labels = formatC(seq(0, 1, 0.25), 2, format = "f")
+    ) +
+    guides(
+      color = guide_colorbar(order = 1),
+      size = guide_legend("% cells with expr. above\n global marker median")
+    ) +
+    coord_equal() +
+    theme_linedraw() +
+    theme(
+      panel.grid = element_blank(),
+      panel.border = element_blank(),
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
 
-  return(dot_PLOT)
+  return(list(dp = dot_PLOT, dp_val = dot_PLOT_VALUES))
 }
 
 

@@ -805,10 +805,6 @@ norm_dir <- file.path(workFolder, "CYTOF_data", "CytoNormed", selPanel, "updateF
 analysis_dir <- file.path(workFolder, "CYTOF_data", "Analysis", selPanel)
 if (!dir.exists(analysis_dir)) dir.create(analysis_dir, recursive = TRUE)
 
-# set output directory for reference file analysis
-analysis_ref_dir <- file.path(analysis_dir, "Res_Ref")
-if (!dir.exists(analysis_ref_dir)) dir.create(analysis_ref_dir)
-
 # get fcs files
 fcs_files <- list.files(norm_dir,
                         pattern = ".fcs$",
@@ -887,7 +883,9 @@ ref_sam <- grep("Ref", md_info$sample_id, value = TRUE)
 sce_ref <- sce[, sce$sample_id %in% ref_sam]  # get data only belonging to Ref samples
 colData(sce_ref)$sample_id <- droplevels(colData(sce_ref)$sample_id)
 
-
+# set output directory for reference file analysis
+analysis_ref_dir <- file.path(analysis_dir, "Res_Ref")
+if (!dir.exists(analysis_ref_dir)) dir.create(analysis_ref_dir)
 
 # plot distribution of markers
 # sce_ref <- sce[, sce$sample_id %in% ref_sam[2]] # selects only batch 2
@@ -909,6 +907,10 @@ ggsave(filename = file.path(analysis_ref_dir, file_name), plot = pb_mds_PLOT, wi
 
 
 
+# get only lineage markers
+type_markers <- rownames(sce_ref)[rowData(sce_ref)$marker_class == "type"]
+
+
 # heatmap of median marker intensities
 # in CyTOF applications, a cosine distance shows good performance
 # scale = "last": aggregate then scale & trim
@@ -923,30 +925,35 @@ draw(marker_heatmap_PLOT)
 dev.off()
 
 
-
-
-
 # identification with FlowSOM: using k = 20 metacluster
 # id of som(i.e. 100 clusters) and metacluster are stored in cluster_ids
 set.seed(1234)
 
+features = "type"   # type, state, or vector of specific markers
 sce_ref <- cluster(sce_ref,
-                   features = "type",
+                   features = features,
                    xdim = 10,
                    ydim = 10,
                    maxK = 20,
                    seed = 1234)
 
-features <- "type"  # can be "type", "state", or a vector of specific markers
-k <- "meta20"
+# add meta clusters to column data
+sce_ref$meta8 <- cluster_ids(sce_ref, "meta8")
+sce_ref$meta10 <- cluster_ids(sce_ref, "meta10")
+sce_ref$meta15 <- cluster_ids(sce_ref, "meta15")
+sce_ref$meta20 <- cluster_ids(sce_ref, "meta20")
+
+
+marker <- "LINEAGE"  # lineage, functional, all
+k <- "meta8"   # meta8, meta10, meta15, meta20
 cluster_marker_heatmap <- plotExprHeatmap(sce_ref,
-                                          features = features,
+                                          features = "type",
                                           by = "cluster_id",
                                           k = k,
                                           bars = TRUE,
                                           perc = TRUE)
 
-file_name <- paste0("Ref_expr_heatmap_clusters_markers", ".png")
+file_name <- paste0(k, "_expr_heatmap_", marker, "_markers", ".png")
 png(file.path(analysis_ref_dir, file_name), width = 12, height = 8, units = "in", res = 300)
 draw(cluster_marker_heatmap)
 dev.off()
@@ -959,69 +966,111 @@ table(cluster_ids(sce_ref, "som100"))
 table(cluster_ids(sce_ref, "meta20"))
 
 
-# run t-SNE/UMAP on at most 500/ 1000 cells per sample
-set.seed(1234)
+
+# export matrices
+k <- "meta20"   # cluster_id (100 clusters), meta8, meta10, meta15, meta20
+fun <- "mean"   # mean, median
+raw_clust_expr <- CATALYST:::.agg(sce_ref, by = k, assay = "exprs", fun = fun)
+raw_clust_expr_df <- as.data.frame(raw_clust_expr)
+
+file_name <- paste0(k, "_", fun, "_expr_matrix", ".txt")
+write.table(raw_clust_expr_df, file.path(analysis_ref_dir, file_name), sep = "\t", quote = FALSE, col.names = NA)
+
+
+
+# run PCA
+pc_prop <- 0.75 # proportion of total features to use
+sce_ref <- runPCA(sce_ref, exprs_values = "exprs", ncomponents = floor(length(type_markers) * pc_prop))
+
+# elbow plot
+pca_matrix <- reducedDim(sce_ref, "PCA")
+pca_variance <- apply(pca_matrix, 2, var)
+pca_variance_explained <- pca_variance / sum(pca_variance)
+
+# examine cumulative variance
+cumsum(pca_variance_explained)
+
+
+elbow_df <- data.frame(
+  PC = seq_along(pca_variance_explained),
+  VarianceExplained = pca_variance_explained
+)
+
+elbow_PLOT <- ggplot(elbow_df, aes(x = PC, y = VarianceExplained)) +
+  geom_point(color = "#4287f5", size = 2) +
+  geom_line(color = "#4287f5", linewidth = 0.9) +
+  geom_text(aes(label = round(VarianceExplained, 2)),  # label each point
+            hjust = -0.5, vjust = -0.5, size = 3.5) +
+  scale_x_continuous(breaks = elbow_df$PC) +           # show all PC numbers on axis
+  labs(title = paste0("PCA Elbow Plot", " - ", selPanel, " Reference"),
+       x = "Principal Component",
+       y = "Proportion of Variance Explained") +
+  theme_light(base_size = 14)
+
+file_name <- paste0(selPanel, "_PCA_Elbow_Plot", ".png")
+ggsave(filename = file.path(analysis_ref_dir, file_name), plot = elbow_PLOT, height = 8, width = 12)
+
+
 
 # UMAP
-sce_ref <- runDR(sce_ref, "UMAP", cells = 1e3, features = "type")
-marker <- "CD4"
-umap_PLOT <- plotDR(sce_ref, "UMAP", color_by = marker)
+n_components <- 10   # change as needed
 
-file_name <- paste0("Ref_UMAP", "_color_by_", marker, ".png")
-ggsave(filename = file.path(analysis_ref_dir, file_name), plot = umap_PLOT, width = 10, height = 10, bg = "white")
+umap_dir <- file.path(analysis_ref_dir, "UMAP", paste0("PC_", n_components))
+if (!dir.exists(umap_dir)) dir.create(umap_dir, recursive = TRUE)
 
 
+sce_ref <- runDR(sce_ref, "UMAP", cells = 1e3, features = type_markers, ncomponents = n_components)
 
+k <- "meta20"  # meta8, meta10, meta15, meta20
 
-# add meta cluster id as new column
-# k <- "meta20"
-# sce_ref$meta20 <- cluster_ids(sce_ref, k = k)
-# avg_expr <- CATALYST:::.agg(sce_ref, by = k, fun = "mean")
+umap_PLOT <- plotDR(sce_ref, "UMAP", color_by = k)
+file_name <- paste0("UMAP_", k, ".png")
+ggsave(filename = file.path(umap_dir, file_name), plot = umap_PLOT, width = 10, height = 10, bg = "white")
 
+umap_facet_PLOT <- plotDR(sce_ref, "UMAP", color_by = k, facet_by = k)
+file_name <- paste0("UMAP_", k, "_facet_by_cluster", ".png")
+ggsave(filename = file.path(umap_dir, file_name), plot = umap_facet_PLOT, width = 12, height = 10, bg = "white")
 
+umap_facet_sample_PLOT <- plotDR(sce_ref, "UMAP", color_by = k, facet_by = "sample_id")
+file_name <- paste0("UMAP_", k, "_facet_by_sample_id", ".png")
+ggsave(filename = file.path(umap_dir, file_name), plot = umap_facet_sample_PLOT, width = 14, height = 14, bg = "white")
 
 
 # dotplot marker expression
-k <- "meta20"
+dotplot_dir <- file.path(analysis_ref_dir, "Dotplot")
+if (!dir.exists(dotplot_dir)) dir.create(dotplot_dir, recursive = TRUE)
+
+k <- "meta8"
 fun <- "mean"
-dot_PLOT <- dotplot(sce_ref, k = k, fun = fun, output_dir = analysis_ref_dir)
-  
-file_name <- paste0("Ref_dotplot_", fun, "_", k, ".png")
-ggsave(filename = file.path(analysis_ref_dir, file_name), plot = dot_PLOT, width = 12, height = 8)
+dot_PLOT <- dotplot(sce_ref, k = k, fun = fun, output_dir = dotplot_dir)
+
+file_name <- paste0(k, "dotplot_", fun, ".png")
+ggsave(filename = file.path(dotplot_dir, file_name), plot = dot_PLOT, width = 11, height = 6)
 
 
 
 # analyze cluster proportion by sample
-k <- "meta20"
+cluster_info_dir <- file.path(analysis_ref_dir, "Cluster_Info")
+if (!dir.exists(cluster_info_dir)) dir.create(cluster_info_dir, recursive = TRUE)
+
+k <- "meta8"
 df_clusters_per_sample <- get_cluster_prop_within_sample(sce_ref, k)
 
 file_name <- paste0(k, "_cluster_proportion_within_sample.txt")
-write.table(df_clusters_per_sample, file.path(analysis_ref_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
+write.table(df_clusters_per_sample, file.path(cluster_info_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
-# track FSOM cluster & meta cluster grouping
-k <- "meta20"
-df_cluster_map <- get_cluster_mapping(sce_ref, k)
+# track meta cluster grouping
+meta_vec <- c("meta8", "meta10", "meta15", "meta20")  # change as needed
+df_cluster_map <- get_cluster_mapping(sce_ref, meta_vec = meta_vec)
 
-file_name <- paste0(k, "_cluster_mapping.txt")
-write.table(df_cluster_map, file.path(analysis_ref_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
+file_name <- paste0("cluster_mapping.txt")
+write.table(df_cluster_map, file.path(cluster_info_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
 
 
 ################################################################################
 # ANALYSIS - ALL SAMPLES
 ################################################################################
-
-# NOTE:
-# Not enough memory to cluster with all cells.
-# For now, segment cells by batch for analysis.
-
-colData(sce)$sample_id <- droplevels(colData(sce)$sample_id)
-
-
-# set output directory
-analysis_dir <- file.path(workFolder, "CYTOF_data", "Analysis", selPanel)
-if (!dir.exists(analysis_dir)) dir.create(analysis_dir, recursive = TRUE)
-
 
 # plot distribution of markers
 color_by <- "BATCH"
@@ -1030,54 +1079,16 @@ marker_dist_PLOT <- plotExprs(sce, color_by = color_by)
 file_name <- paste0("marker_distribution_by_", color_by, ".png")
 ggsave(filename = file.path(analysis_dir, file_name), plot = marker_dist_PLOT, width = 10, height = 7)
 
-
-
-
-# TBNK ONLY: Not enough memory to save all markers on 1 figure #################
-# plot distribution of markers
-
-# # subset markers by type
-# type_markers <- tmp_panel$antigen[tmp_panel$marker_class == "type"]
-# state_markers <- tmp_panel$antigen[tmp_panel$marker_class == "state"]
-# 
-# color_by <- "BATCH"
-# type_marker_dist_PLOT <- plotExprs(sce, color_by = color_by, features = type_markers)
-# file_name <- paste0("type_marker_distribution_by_", color_by, ".png")
-# ggsave(filename = file.path(analysis_dir, file_name), plot = type_marker_dist_PLOT, width = 12, height = 8)
-# 
-# # color_by <- "BATCH"
-# # state_marker_dist_PLOT <- plotExprs(sce, color_by = color_by, features = state_markers)
-# # file_name <- paste0("state_marker_distribution_by_", color_by, ".pdf")
-# # ggsave(filename = file.path(analysis_dir, file_name), plot = state_marker_dist_PLOT, width = 12, height = 8)
-# 
-# 
-# # split state markers into chunks...still encountering memory issues with method above
-# state_marker_chunks <- split(state_markers, ceiling(seq_along(state_markers) / 5))
-# 
-# for (i in seq_along(state_marker_chunks)) {
-#   plot_i <- plotExprs(sce, color_by = "BATCH", features = state_marker_chunks[[i]])
-#   ggsave(file.path(analysis_dir, paste0("state_marker_distribution_by_BATCH_chunk_", i, ".png")),
-#          plot = plot_i, width = 12, height = 8, dpi = 300)
-# }
-################################################################################
-
-
-
-
-
 # plot mulit-dimension scale (median marker intensities)
 color_by <- "BATCH"
 label_by <- "sample_id"
 pb_mds_PLOT <- pbMDS(sce, color_by = color_by, label_by = label_by)
 
 file_name <- paste0("pbMDS_by_", color_by, "_", label_by, ".png")
-ggsave(filename = file.path(analysis_dir, file_name), plot = pb_mds_PLOT, width = 18, height = 16)
+ggsave(filename = file.path(analysis_dir, file_name), plot = pb_mds_PLOT, width = 14, height = 14)
 
 
-
-# heatmap of median marker intensities
-# in CyTOF applications, a cosine distance shows good performance
-# scale = "last": aggregate then scale & trim
+# marker heatmap by sample
 marker_heatmap_PLOT <- plotExprHeatmap(sce,
                                        scale = "last",
                                        row_anno = FALSE,
@@ -1087,87 +1098,6 @@ file_name <- paste0("expr_heatmap_all_markers", ".png")
 png(file.path(analysis_dir, file_name), width = 18, height = 12, units = "in", res = 300)
 draw(marker_heatmap_PLOT, heatmap_legend_side = "bottom", padding = unit(c(10, 10, 10, 20), "mm"))
 dev.off()
-
-
-
-# identification with FlowSOM: using k = 20 metacluster
-# id of som(i.e. 100 clusters) and metacluster are stored in cluster_ids
-set.seed(1234)
-
-sce <- cluster(sce,
-               features = "type",
-               xdim = 10,
-               ydim = 10,
-               maxK = 20,
-               seed = 1234)
-
-
-
-features <- "type"  # can be "type", "state", or a vector of specific markers
-k <- "meta20"
-cluster_marker_heatmap <- plotExprHeatmap(sce,
-                                          features = features,
-                                          by = "cluster_id",
-                                          k = k,
-                                          bars = TRUE,
-                                          perc = TRUE)
-
-file_name <- paste0("expr_heatmap_clusters_", features, "_markers", ".png")
-png(file.path(analysis_dir, file_name), width = 12, height = 8, units = "in", res = 300)
-draw(cluster_marker_heatmap)
-dev.off()
-
-# codes of clusters
-names(cluster_codes(sce))
-# access specific clustering resolution i.e. cellIDS
-table(cluster_ids(sce, "som100"))
-table(cluster_ids(sce, "meta20"))
-
-
-
-
-# run t-SNE/UMAP on at most 500/ 1000 cells per sample
-set.seed(1234)
-
-# UMAP
-
-# lineage markers
-sce <- runDR(sce, "UMAP", cells = 1e3, features = "type")
-marker <- "CD4"
-umap_PLOT <- plotDR(sce, "UMAP", color_by = marker)
-
-file_name <- paste0("UMAP", "_color_by_", marker, ".png")
-ggsave(filename = file.path(analysis_dir, file_name), plot = umap_PLOT, width = 10, height = 10, bg = "white")
-
-
-
-
-# dotplot marker expression
-k <- "meta20"
-fun <- "mean"
-dot_PLOT <- dotplot(sce, k = k, fun = fun, output_dir = analysis_dir)
-
-file_name <- paste0("dotplot_", fun, "_", k, ".png")
-ggsave(filename = file.path(analysis_dir, file_name), plot = dot_PLOT, width = 12, height = 8)
-
-
-
-
-
-# analyze cluster proportion by sample
-k <- "meta20"
-df_clusters_per_sample <- get_cluster_prop_within_sample(sce, k)
-
-file_name <- paste0(k, "_cluster_proportion_within_sample.txt")
-write.table(df_clusters_per_sample, file.path(analysis_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
-
-
-# track FSOM cluster & meta cluster grouping
-k <- "meta20"
-df_cluster_map <- get_cluster_mapping(sce, k)
-
-file_name <- paste0(k, "_cluster_mapping.txt")
-write.table(df_cluster_map, file.path(analysis_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
 
 
@@ -1200,153 +1130,10 @@ fcs_files <- list.files(norm_dir,
                         full.names = TRUE)
 
 
-# extract sample info from fcs files
-getCoreID <- function(x) {
-  xlist <- unlist(strsplit(x, split = "_"))[1:4]
-  xcore <- paste0(xlist, collapse = "_")
-}
-
-tmp_core <- sapply(basename(fcs_files), getCoreID, simplify = TRUE)
-
-# match filenames and metadata
-# prepare metadata for CATALYST
-sampleInfo <- dplyr::filter(allSampleInfo, panel_id == selPanel)
-md_info <- left_join(data.frame(file = basename(fcs_files), sample_id = tmp_core),
-                     sampleInfo[, -1],
-                     by = join_by(sample_id == corename))
-
-md_info$BATCH <- factor(md_info$BATCH)
-
-# import fcs as sce object (arcsinh, transform = TRUE by default)
-sce <- CATALYST::prepData(fcs_files,
-                          panel = tmp_panel, # panel marker info
-                          md = md_info, # sample info
-                          panel_cols = list(channel = "fcs_colname", antigen = "antigen", class = "marker_class"),
-                          md_cols = list(file = "file",
-                                         id = "sample_id",
-                                         factors = c("tissue_type", "patient_id", "parental_sample_id", "BATCH")))
-
-
-colData(sce)$sample_id <- droplevels(colData(sce)$sample_id)
-
-
-# plot distribution of markers
-color_by <- "BATCH"
-marker_dist_PLOT <- plotExprs(sce, color_by = color_by)
-
-file_name <- paste0("marker_distribution_by_", color_by, ".png")
-ggsave(filename = file.path(res_dir, file_name), plot = marker_dist_PLOT, width = 10, height = 7)
-
-
-
-# plot mulit-dimension scale (median marker intensities)
-color_by <- "BATCH"
-label_by <- "sample_id"
-pb_mds_PLOT <- pbMDS(sce, color_by = color_by, label_by = label_by)
-
-file_name <- paste0("pbMDS_by_", color_by, "_", label_by, ".png")
-ggsave(filename = file.path(res_dir, file_name), plot = pb_mds_PLOT, width = 18, height = 16)
-
-
-
-# heatmap of median marker intensities
-# in CyTOF applications, a cosine distance shows good performance
-# scale = "last": aggregate then scale & trim
-marker_heatmap_PLOT <- plotExprHeatmap(sce,
-                                       scale = "last",
-                                       row_anno = FALSE,
-                                       col_anno = FALSE)
-
-file_name <- paste0("expr_heatmap_all_markers", ".png")
-png(file.path(res_dir, file_name), width = 18, height = 12, units = "in", res = 300)
-draw(marker_heatmap_PLOT, heatmap_legend_side = "bottom", padding = unit(c(10, 10, 10, 20), "mm"))
-dev.off()
-
-
-# identification with FlowSOM: using k = 20 metacluster
-# id of som(i.e. 100 clusters) and metacluster are stored in cluster_ids
-set.seed(1234)
-
-features <- "type"
-sce <- cluster(sce,
-               features = features,
-               xdim = 10,
-               ydim = 10,
-               maxK = 20,
-               seed = 1234)
-
-
-
-features <- "type"  # can be "type", "state", or a vector of specific markers
-k <- "meta20"
-cluster_marker_heatmap <- plotExprHeatmap(sce,
-                                          features = features,
-                                          by = "cluster_id",
-                                          k = k,
-                                          bars = TRUE,
-                                          perc = TRUE)
-
-file_name <- paste0("expr_heatmap_clusters_", features, "_markers", ".png")
-png(file.path(res_dir, file_name), width = 12, height = 8, units = "in", res = 300)
-draw(cluster_marker_heatmap)
-dev.off()
-
-
-# codes of clusters
-names(cluster_codes(sce))
-# access specific clustering resolution i.e. cellIDS
-table(cluster_ids(sce, "som100"))
-table(cluster_ids(sce, "meta20"))
-
-
-
-# run t-SNE/UMAP on at most 500/ 1000 cells per sample
-set.seed(1234)
-
-# UMAP
-
-# lineage markers
-sce <- runDR(sce, "UMAP", cells = 1e3, features = "type")
-marker <- "CD4"
-umap_PLOT <- plotDR(sce, "UMAP", color_by = marker)
-
-file_name <- paste0("UMAP", "_color_by_", marker, ".png")
-ggsave(filename = file.path(res_dir, file_name), plot = umap_PLOT, width = 10, height = 10, bg = "white")
-
-
-
-
-# dotplot marker expression
-k <- "meta20"
-fun <- "mean"
-dot_PLOT <- dotplot(sce, k = k, fun = fun, output_dir = res_dir)
-
-file_name <- paste0("dotplot_", fun, "_", k, ".png")
-ggsave(filename = file.path(res_dir, file_name), plot = dot_PLOT, width = 12, height = 8)
-
-
-
-
-# analyze cluster proportion by sample
-k <- "meta20"
-df_clusters_per_sample <- get_cluster_prop_within_sample(sce, k)
-
-file_name <- paste0(k, "_cluster_proportion_within_sample.txt")
-write.table(df_clusters_per_sample, file.path(res_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
-
-
-# track FSOM cluster & meta cluster grouping
-k <- "meta20"
-df_cluster_map <- get_cluster_mapping(sce, k)
-
-file_name <- paste0(k, "_cluster_mapping.txt")
-write.table(df_cluster_map, file.path(res_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
-
-
 
 
 ################################################################################
-# ANALYSIS - DIFFERENTIAL ANALYSIS
+# ANALYSIS - ALL SAMPLES ; LINEAGE MARKERS ONLY
 ################################################################################
 
 # get sample info
@@ -1355,9 +1142,9 @@ allSampleInfo <- read.delim(fin_info, sep = "\t", header = TRUE, stringsAsFactor
 allSampleInfo <- allSampleInfo[, -1]
 
 # select panel
-selPanel <- c("TBNK")
+# selPanel <- c("TBNK")
 # selPanel <- c("Myeloid")
-# selPanel <- c("Cytokines")
+selPanel <- c("Cytokines")
 
 # get panel info
 fin_panel <- paste(selPanel, "_markers_022625.txt", sep="")
@@ -1417,6 +1204,22 @@ colData(sce)$sample_id <- droplevels(colData(sce)$sample_id)
 
 
 
+# plot distribution of markers
+color_by <- "BATCH"
+marker_dist_PLOT <- plotExprs(sce, color_by = color_by)
+
+file_name <- paste0("marker_distribution_by_", color_by, ".png")
+ggsave(filename = file.path(res_dir, file_name), plot = marker_dist_PLOT, width = 10, height = 7)
+
+# plot mulit-dimension scale (median marker intensities)
+color_by <- "BATCH"
+label_by <- "sample_id"
+pb_mds_PLOT <- pbMDS(sce, color_by = color_by, label_by = label_by)
+
+file_name <- paste0("pbMDS_by_", color_by, "_", label_by, ".png")
+ggsave(filename = file.path(res_dir, file_name), plot = pb_mds_PLOT, width = 14, height = 14)
+
+
 # get only lineage markers
 type_markers <- rownames(sce)[rowData(sce)$marker_class == "type"]
 
@@ -1457,7 +1260,7 @@ sce$meta15 <- cluster_ids(sce, "meta15")
 sce$meta20 <- cluster_ids(sce, "meta20")
 
 
-k <- "meta20"   # meta8, meta10, meta15, meta20
+k <- "meta8"   # meta8, meta10, meta15, meta20
 cluster_marker_heatmap <- plotExprHeatmap(sce,
                                           features = type_markers,
                                           by = "cluster_id",
@@ -1473,8 +1276,7 @@ dev.off()
 
 
 # export matrices
-
-k <- "cluster_id"   # cluster_id (100 clusters), meta8, meta10, meta15, meta20
+k <- "meta20"   # cluster_id (100 clusters), meta8, meta10, meta15, meta20
 fun <- "mean"   # mean, median
 raw_clust_expr <- CATALYST:::.agg(sce, by = k, assay = "exprs", fun = fun)
 raw_clust_expr_df <- as.data.frame(raw_clust_expr)
@@ -1521,7 +1323,7 @@ ggsave(filename = file.path(res_dir, file_name), plot = elbow_PLOT, height = 8, 
 
 
 # UMAP
-n_components <- 10   # change as needed
+n_components <- 9   # change as needed
 
 umap_dir <- file.path(res_dir, "UMAP", paste0("PC_", n_components))
 if (!dir.exists(umap_dir)) dir.create(umap_dir, recursive = TRUE)
@@ -1529,7 +1331,7 @@ if (!dir.exists(umap_dir)) dir.create(umap_dir, recursive = TRUE)
 
 sce <- runDR(sce, "UMAP", cells = 1e3, features = type_markers, ncomponents = n_components)
 
-k <- "meta8"  # meta8, meta10, meta15, meta20
+k <- "meta20"  # meta8, meta10, meta15, meta20
 
 umap_PLOT <- plotDR(sce, "UMAP", color_by = k)
 file_name <- paste0("UMAP_", k, ".png")
@@ -1550,10 +1352,12 @@ if (!dir.exists(dotplot_dir)) dir.create(dotplot_dir, recursive = TRUE)
 
 k <- "meta20"
 fun <- "mean"
-dot_PLOT <- dotplot(sce, k = k, fun = fun, output_dir = dotplot_dir)
+dot_PLOTS <- dotplot(sce, k = k, fun = fun, output_dir = dotplot_dir)
 
-file_name <- paste0(k, "dotplot_", fun, ".png")
-ggsave(filename = file.path(dotplot_dir, file_name), plot = dot_PLOT, width = 10, height = 6)
+file_name <- paste0(k, "_dotplot_", fun, ".png")
+ggsave(filename = file.path(dotplot_dir, file_name), plot = dot_PLOTS$dp, width = 10, height = 6)
+file_name <- paste0(k, "_dotplot_values_", fun, ".png")
+ggsave(filename = file.path(dotplot_dir, file_name), plot = dot_PLOTS$dp_val, width = 10, height = 6)
 
 
 
@@ -1562,7 +1366,7 @@ ggsave(filename = file.path(dotplot_dir, file_name), plot = dot_PLOT, width = 10
 cluster_info_dir <- file.path(res_dir, "Cluster_Info")
 if (!dir.exists(cluster_info_dir)) dir.create(cluster_info_dir, recursive = TRUE)
 
-k <- "meta20"
+k <- "meta8"
 df_clusters_per_sample <- get_cluster_prop_within_sample(sce, k)
 
 file_name <- paste0(k, "_cluster_proportion_within_sample.txt")
