@@ -784,30 +784,40 @@ dotplot <- function(sce,
 
   ms_ordered <- ms[co, ro]
   fq_ordered <- fq[co, ro]
-  df <- cbind(melt(ms_ordered), fq = melt(fq_ordered)$value)
+  # df <- cbind(melt(ms_ordered), fq = melt(fq_ordered)$value)
+  df <- melt(ms_ordered)
+  df$fq <- melt(fq_ordered)$value
+  df$Var2 <- factor(df$Var2, levels = as.character(seq_along(ro)), labels = ro)
 
   df_wide <- dcast(df, Var1 ~ Var2, value.var = "value")
+  # Extract cluster column names, sort numerically, then reassemble
+  cluster_cols <- setdiff(colnames(df_wide), "Var1")
+  cluster_cols_sorted <- as.character(sort(as.numeric(cluster_cols)))
+  df_wide <- df_wide[, c("Var1", cluster_cols_sorted)]
+  
 
   # write.table(df, file = paste0("dotplot_", fun, "_expression_matrix.txt"), sep = "\t", quote = FALSE, col.names = NA)
   # write.table(df_wide, file = paste0("dotplot_", fun, "_expression_matrix_wide.txt"), sep = "\t", quote = FALSE, col.names = NA)
 
   # Write the *raw* (unclustered) matrix
-  df_raw <- cbind(melt(ms), fq = melt(fq)$value)
-  
-  # Ensure Var2 (cluster column) is a factor with levels == actual cluster IDs
-  df_raw$Var2 <- factor(df_raw$Var2, levels = cluster_ids_actual)
-  
-  df_raw_wide <- dcast(df_raw, Var1 ~ Var2, value.var = "value")
+  # df_raw <- cbind(melt(ms), fq = melt(fq)$value)
+  # df_raw <- melt(ms)
+  # df_raw$fq <-melt(fq)$value
+  # 
+  # # Ensure Var2 (cluster column) is a factor with levels == actual cluster IDs
+  # df_raw$Var2 <- factor(df_raw$Var2, levels = cluster_ids_actual)
+  # 
+  # df_raw_wide <- dcast(df_raw, Var1 ~ Var2, value.var = "value")
 
-  write.table(df_raw, file = file.path(output_dir, paste0(k, "_dotplot_", fun, "_expression_matrix.txt")), sep = "\t", quote = FALSE, col.names = NA)
+  write.table(df, file = file.path(output_dir, paste0(k, "_dotplot_", fun, "_expression_matrix.txt")), sep = "\t", quote = FALSE, col.names = NA)
 
-  write.table(df_raw_wide, file = file.path(output_dir, paste0(k, "_dotplot_", fun, "_expression_matrix_wide.txt")), sep = "\t", quote = FALSE, col.names = NA)
+  write.table(df_wide, file = file.path(output_dir, paste0(k, "_dotplot_", fun, "_expression_matrix_wide.txt")), sep = "\t", quote = FALSE, col.names = NA)
 
 
   dot_PLOT <- ggplot(df, aes(Var1, Var2, col = value, size = fq, label = sprintf("%.2f", value))) +
     geom_point() +
     # geom_text(color = "black", size = 2.5, vjust = 0.5) +  # show mean/median value; comment out line if desired
-    scale_x_discrete("marker", limits = co, expand = c(0, 0.5)) +
+    scale_x_discrete("marker", limits = co, expand = c(0, 1)) +
     scale_y_discrete("cluster_id", limits = ro, expand = c(0, 0.5)) +
     scale_color_gradientn(lab, breaks = seq(0, 1, 0.5), colors = pal) +
     scale_size_continuous(
@@ -823,13 +833,14 @@ dotplot <- function(sce,
     theme(
       panel.grid = element_blank(),
       panel.border = element_blank(),
-      axis.text.x = element_text(angle = 45, hjust = 1)
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      axis.text.y = element_text(size = 8, margin = margin(r = 4))
     )
   
   dot_PLOT_VALUES <- ggplot(df, aes(Var1, Var2, col = value, size = fq, label = sprintf("%.2f", value))) +
     geom_point() +
     geom_text(color = "black", size = 2.5, vjust = 0.5) +  # show mean/median value; comment out line if desired
-    scale_x_discrete("marker", limits = co, expand = c(0, 0.5)) +
+    scale_x_discrete("marker", limits = co, expand = c(0, 1)) +
     scale_y_discrete("cluster_id", limits = ro, expand = c(0, 0.5)) +
     scale_color_gradientn(lab, breaks = seq(0, 1, 0.5), colors = pal) +
     scale_size_continuous(
@@ -845,7 +856,8 @@ dotplot <- function(sce,
     theme(
       panel.grid = element_blank(),
       panel.border = element_blank(),
-      axis.text.x = element_text(angle = 45, hjust = 1)
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      axis.text.y = element_text(size = 8, margin = margin(r = 4))
     )
 
   return(list(dp = dot_PLOT, dp_val = dot_PLOT_VALUES))

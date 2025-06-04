@@ -1203,12 +1203,21 @@ SummarizedExperiment(sce)
 colData(sce)$sample_id <- droplevels(colData(sce)$sample_id)
 
 
+# get only lineage markers
+type_markers <- rownames(sce)[rowData(sce)$marker_class == "type"]
+
+# subset sce for lineage markers; reassign 'sce' to save memory
+sce <- sce[type_markers, ]
+
+
 
 # plot distribution of markers
 color_by <- "BATCH"
 marker_dist_PLOT <- plotExprs(sce, color_by = color_by)
 
-file_name <- paste0("marker_distribution_by_", color_by, ".png")
+marker <- "LINEAGE"   # LINEAGE, FUNCTIONAL, ""
+
+file_name <- paste0("marker_distribution_by_", color_by, "_", marker, "_markers", ".png")
 ggsave(filename = file.path(res_dir, file_name), plot = marker_dist_PLOT, width = 10, height = 7)
 
 # plot mulit-dimension scale (median marker intensities)
@@ -1216,15 +1225,9 @@ color_by <- "BATCH"
 label_by <- "sample_id"
 pb_mds_PLOT <- pbMDS(sce, color_by = color_by, label_by = label_by)
 
-file_name <- paste0("pbMDS_by_", color_by, "_", label_by, ".png")
+file_name <- paste0("pbMDS_by_", color_by, "_", label_by, "_", marker, "_markers", ".png")
 ggsave(filename = file.path(res_dir, file_name), plot = pb_mds_PLOT, width = 14, height = 14)
 
-
-# get only lineage markers
-type_markers <- rownames(sce)[rowData(sce)$marker_class == "type"]
-
-# subset sce for lineage markers; reassign 'sce' to save memory
-sce <- sce[type_markers, ]
 
 
 
@@ -1234,11 +1237,14 @@ marker_heatmap_PLOT <- plotExprHeatmap(sce,
                                        col_anno = FALSE)
 
 marker <- "LINEAGE"  # lineage, functional, all
-
 file_name <- paste0("expr_heatmap_", marker, "_markers", ".png")
-png(file.path(res_dir, file_name), width = 18, height = 12, units = "in", res = 300)
+png(file.path(res_dir, file_name), width = 14, height = 12, units = "in", res = 300)
 draw(marker_heatmap_PLOT, heatmap_legend_side = "bottom", padding = unit(c(10, 10, 10, 20), "mm"))
 dev.off()
+
+
+
+maxk <- 25  # change as needed
 
 
 
@@ -1249,7 +1255,7 @@ sce <- cluster(sce,
                features = type_markers,
                xdim = 10,
                ydim = 10,
-               maxK = 20,
+               maxK = maxk,
                seed = 1234)
 
 
@@ -1258,9 +1264,10 @@ sce$meta8 <- cluster_ids(sce, "meta8")
 sce$meta10 <- cluster_ids(sce, "meta10")
 sce$meta15 <- cluster_ids(sce, "meta15")
 sce$meta20 <- cluster_ids(sce, "meta20")
+sce$meta25 <- cluster_ids(sce, "meta25")
 
 
-k <- "meta8"   # meta8, meta10, meta15, meta20
+k <- "meta25"   # meta8, meta10, meta15, meta20, meta25
 cluster_marker_heatmap <- plotExprHeatmap(sce,
                                           features = type_markers,
                                           by = "cluster_id",
@@ -1268,6 +1275,7 @@ cluster_marker_heatmap <- plotExprHeatmap(sce,
                                           bars = TRUE,
                                           perc = TRUE)
 
+marker <- "LINEAGE"  # lineage, functional, all
 file_name <- paste0(k, "_expr_heatmap_", marker, "_markers", ".png")
 png(file.path(res_dir, file_name), width = 12, height = 8, units = "in", res = 300)
 draw(cluster_marker_heatmap)
@@ -1276,7 +1284,7 @@ dev.off()
 
 
 # export matrices
-k <- "meta20"   # cluster_id (100 clusters), meta8, meta10, meta15, meta20
+k <- "meta25"   # cluster_id (100 clusters), meta8, meta10, meta15, meta20
 fun <- "mean"   # mean, median
 raw_clust_expr <- CATALYST:::.agg(sce, by = k, assay = "exprs", fun = fun)
 raw_clust_expr_df <- as.data.frame(raw_clust_expr)
@@ -1323,7 +1331,7 @@ ggsave(filename = file.path(res_dir, file_name), plot = elbow_PLOT, height = 8, 
 
 
 # UMAP
-n_components <- 9   # change as needed
+n_components <- 4   # change as needed
 
 umap_dir <- file.path(res_dir, "UMAP", paste0("PC_", n_components))
 if (!dir.exists(umap_dir)) dir.create(umap_dir, recursive = TRUE)
@@ -1331,7 +1339,7 @@ if (!dir.exists(umap_dir)) dir.create(umap_dir, recursive = TRUE)
 
 sce <- runDR(sce, "UMAP", cells = 1e3, features = type_markers, ncomponents = n_components)
 
-k <- "meta20"  # meta8, meta10, meta15, meta20
+k <- "meta8"  # meta8, meta10, meta15, meta20
 
 umap_PLOT <- plotDR(sce, "UMAP", color_by = k)
 file_name <- paste0("UMAP_", k, ".png")
@@ -1341,23 +1349,23 @@ umap_facet_PLOT <- plotDR(sce, "UMAP", color_by = k, facet_by = k)
 file_name <- paste0("UMAP_", k, "_facet_by_cluster", ".png")
 ggsave(filename = file.path(umap_dir, file_name), plot = umap_facet_PLOT, width = 12, height = 10, bg = "white")
 
-umap_facet_sample_PLOT <- plotDR(sce, "UMAP", color_by = k, facet_by = "sample_id")
-file_name <- paste0("UMAP_", k, "_facet_by_sample_id", ".png")
-ggsave(filename = file.path(umap_dir, file_name), plot = umap_facet_sample_PLOT, width = 20, height = 20, bg = "white")
+# umap_facet_sample_PLOT <- plotDR(sce, "UMAP", color_by = k, facet_by = "sample_id")
+# file_name <- paste0("UMAP_", k, "_facet_by_sample_id", ".png")
+# ggsave(filename = file.path(umap_dir, file_name), plot = umap_facet_sample_PLOT, width = 20, height = 20, bg = "white")
 
 
 # dotplot marker expression
 dotplot_dir <- file.path(res_dir, "Dotplot")
 if (!dir.exists(dotplot_dir)) dir.create(dotplot_dir, recursive = TRUE)
 
-k <- "meta20"
+k <- "meta25"
 fun <- "mean"
 dot_PLOTS <- dotplot(sce, k = k, fun = fun, output_dir = dotplot_dir)
 
 file_name <- paste0(k, "_dotplot_", fun, ".png")
-ggsave(filename = file.path(dotplot_dir, file_name), plot = dot_PLOTS$dp, width = 10, height = 6)
-file_name <- paste0(k, "_dotplot_values_", fun, ".png")
-ggsave(filename = file.path(dotplot_dir, file_name), plot = dot_PLOTS$dp_val, width = 10, height = 6)
+ggsave(filename = file.path(dotplot_dir, file_name), plot = dot_PLOTS$dp, width = 10, height = 8)
+file_name <- paste0(k, "_dotplot_", fun, "_values", ".png")
+ggsave(filename = file.path(dotplot_dir, file_name), plot = dot_PLOTS$dp_val, width = 10, height = 8)
 
 
 
@@ -1366,14 +1374,14 @@ ggsave(filename = file.path(dotplot_dir, file_name), plot = dot_PLOTS$dp_val, wi
 cluster_info_dir <- file.path(res_dir, "Cluster_Info")
 if (!dir.exists(cluster_info_dir)) dir.create(cluster_info_dir, recursive = TRUE)
 
-k <- "meta8"
+k <- "meta25"
 df_clusters_per_sample <- get_cluster_prop_within_sample(sce, k)
 
 file_name <- paste0(k, "_cluster_proportion_within_sample.txt")
 write.table(df_clusters_per_sample, file.path(cluster_info_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
 # track meta cluster grouping
-meta_vec <- c("meta8", "meta10", "meta15", "meta20")  # change as needed
+meta_vec <- c("meta8", "meta10", "meta15", "meta20", "meta25")  # change as needed
 df_cluster_map <- get_cluster_mapping(sce, meta_vec = meta_vec)
 
 file_name <- paste0("cluster_mapping.txt")
