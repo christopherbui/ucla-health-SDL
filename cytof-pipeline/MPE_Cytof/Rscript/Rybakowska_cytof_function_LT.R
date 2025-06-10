@@ -758,14 +758,18 @@ dotplot <- function(sce,
                     pal = hcl.colors(11, "viridis"),
                     output_dir = NULL) {
 
-  sce$cluster_id <- cluster_ids(sce, k)
+  # sce$cluster_id <- cluster_ids(sce, k)
+  
+  sce$cluster_id <- colData(sce)[[k]]
+  
   es <- assay(sce, assay)   # expression matrix
   th <- rowMedians(es)
 
   cs <- seq_len(ncol(sce))
   cs <- split(cs, sce$cluster_id)
-  fq <- sapply(cs, function(i)
-    rowMeans(es[, i, drop = FALSE] > th))
+  fq <- sapply(cs, function(i) {
+    rowMeans(es[, i, drop = FALSE] > th)
+  })
 
   # compute median expression by cluster
   lab <- paste(fun, assay)
@@ -781,6 +785,9 @@ dotplot <- function(sce,
   cluster_order <- function(x) order.dendrogram(as.dendrogram(hclust(dist(x))))
   ro <- colnames(ms)[cluster_order(t(ms))]
   co <- rownames(ms)[cluster_order(ms)]
+  
+  # use "Symbol" marker names; preferred for publishing
+  marker_symbols <- rowData(sce)$Symbol[match(co, rownames(sce))]
 
   ms_ordered <- ms[co, ro]
   fq_ordered <- fq[co, ro]
@@ -788,59 +795,26 @@ dotplot <- function(sce,
   df <- melt(ms_ordered)
   df$fq <- melt(fq_ordered)$value
   df$Var2 <- factor(df$Var2, levels = as.character(seq_along(ro)), labels = ro)
-
-  df_wide <- dcast(df, Var1 ~ Var2, value.var = "value")
-  # Extract cluster column names, sort numerically, then reassemble
-  cluster_cols <- setdiff(colnames(df_wide), "Var1")
-  cluster_cols_sorted <- as.character(sort(as.numeric(cluster_cols)))
-  df_wide <- df_wide[, c("Var1", cluster_cols_sorted)]
   
+  # map Var1 to the Symbol names for plotting
+  df$Symbol <- factor(df$Var1, levels = co, labels = marker_symbols)
 
-  # write.table(df, file = paste0("dotplot_", fun, "_expression_matrix.txt"), sep = "\t", quote = FALSE, col.names = NA)
-  # write.table(df_wide, file = paste0("dotplot_", fun, "_expression_matrix_wide.txt"), sep = "\t", quote = FALSE, col.names = NA)
+  df_wide <- dcast(df, Symbol ~ Var2, value.var = "value")
+  
+  # Extract cluster column names, sort numerically, then reassemble
+  cluster_cols <- setdiff(colnames(df_wide), "Symbol")
+  cluster_cols_sorted <- as.character(sort(as.numeric(cluster_cols)))
+  df_wide <- df_wide[, c("Symbol", cluster_cols_sorted)]
 
-  # Write the *raw* (unclustered) matrix
-  # df_raw <- cbind(melt(ms), fq = melt(fq)$value)
-  # df_raw <- melt(ms)
-  # df_raw$fq <-melt(fq)$value
-  # 
-  # # Ensure Var2 (cluster column) is a factor with levels == actual cluster IDs
-  # df_raw$Var2 <- factor(df_raw$Var2, levels = cluster_ids_actual)
-  # 
-  # df_raw_wide <- dcast(df_raw, Var1 ~ Var2, value.var = "value")
-
-  write.table(df, file = file.path(output_dir, paste0(k, "_dotplot_", fun, "_expression_matrix.txt")), sep = "\t", quote = FALSE, col.names = NA)
+  # write.table(df, file = file.path(output_dir, paste0(k, "_dotplot_", fun, "_expression_matrix.txt")), sep = "\t", quote = FALSE, col.names = NA)
 
   write.table(df_wide, file = file.path(output_dir, paste0(k, "_dotplot_", fun, "_expression_matrix_wide.txt")), sep = "\t", quote = FALSE, col.names = NA)
 
 
-  dot_PLOT <- ggplot(df, aes(Var1, Var2, col = value, size = fq, label = sprintf("%.2f", value))) +
+  dot_PLOT <- ggplot(df, aes(Symbol, Var2, col = value, size = fq, label = sprintf("%.2f", value))) +
     geom_point() +
     # geom_text(color = "black", size = 2.5, vjust = 0.5) +  # show mean/median value; comment out line if desired
-    scale_x_discrete("marker", limits = co, expand = c(0, 1)) +
-    scale_y_discrete("cluster_id", limits = ro, expand = c(0, 0.5)) +
-    scale_color_gradientn(lab, breaks = seq(0, 1, 0.5), colors = pal) +
-    scale_size_continuous(
-      range = c(0, 5),
-      labels = formatC(seq(0, 1, 0.25), 2, format = "f")
-    ) +
-    guides(
-      color = guide_colorbar(order = 1),
-      size = guide_legend("% cells with expr. above\n global marker median")
-    ) +
-    coord_equal() +
-    theme_linedraw() +
-    theme(
-      panel.grid = element_blank(),
-      panel.border = element_blank(),
-      axis.text.x = element_text(angle = 45, hjust = 1),
-      axis.text.y = element_text(size = 8, margin = margin(r = 4))
-    )
-  
-  dot_PLOT_VALUES <- ggplot(df, aes(Var1, Var2, col = value, size = fq, label = sprintf("%.2f", value))) +
-    geom_point() +
-    geom_text(color = "black", size = 2.5, vjust = 0.5) +  # show mean/median value; comment out line if desired
-    scale_x_discrete("marker", limits = co, expand = c(0, 1)) +
+    scale_x_discrete("marker", limits = marker_symbols, expand = c(0, 1)) +
     scale_y_discrete("cluster_id", limits = ro, expand = c(0, 0.5)) +
     scale_color_gradientn(lab, breaks = seq(0, 1, 0.5), colors = pal) +
     scale_size_continuous(
@@ -860,8 +834,134 @@ dotplot <- function(sce,
       axis.text.y = element_text(size = 8, margin = margin(r = 4))
     )
 
-  return(list(dp = dot_PLOT, dp_val = dot_PLOT_VALUES))
+  return(dot_PLOT)
 }
+
+
+
+
+dotplot_4SDL <- function(sce,
+                         cluster_name,
+                         assay = "exprs",
+                         fun = "median",
+                         scale = TRUE,
+                         pal = hcl.colors(11, "viridis"),
+                         output_dir = NULL) {
+  
+  # this allows us to select both raw (from FSOM) & processed clusters
+  sce$cluster_id <- colData(sce)[[cluster_name]]
+  
+  es <- assay(sce, assay) # expression matrix
+  th <- rowMedians(es)
+  
+  cs <- seq_len(ncol(sce))
+  cs <- split(cs, sce$cluster_id)
+  fq <- sapply(cs, function(i) {
+    rowMeans(es[, i, drop = FALSE] > th)
+  })
+  
+  
+  # compute median expression by cluster
+  lab <- paste(fun, assay)
+  ms <- CATALYST:::.agg(sce, by = "cluster_id", assay = assay, fun = fun)
+  if (scale) {
+    lab <- paste("scaled", lab)
+    scale_level <- seq(0, 1, by = 0.1)
+    scale_label <- scale_level[-1]
+    qq_th <- rowQuantiles(es, probs = scale_level)
+    qq_th[, 1] <- 0
+    qq_th[, ncol(qq_th)] <- Inf
+    ms_glob <- t(sapply(1:nrow(ms), function(i) cut(ms[i, ], qq_th[i, ], labels = scale_label)))
+    ms_glob <- ifelse(is.na(ms_glob), 0, ms_glob)
+    ms <- matrix(as.numeric(ms_glob), nrow(ms_glob), ncol(ms_glob))
+  }
+  
+  # do hierarchical clustering on rows & columns
+  cluster_order <- function(x) order.dendrogram(as.dendrogram(hclust(dist(x))))
+  ro <- colnames(ms)[cluster_order(t(ms))]
+  co <- rownames(ms)[cluster_order(ms)]
+  
+  # use "Symbol" marker names; preferred for publishing
+  marker_symbols <- rowData(sce)$Symbol[match(co, rownames(sce))]
+  
+  ms_ordered <- ms[co, ro]
+  fq_ordered <- fq[co, ro]
+  
+  df <- cbind(melt(ms_ordered), fq = melt(fq_ordered)$value)
+  # map Var1 to the Symbol names for plotting
+  df$Symbol <- factor(df$Var1, levels = co, labels = marker_symbols)
+  
+  df_wide <- dcast(df, Symbol ~ Var2, value.var = "value")
+  # the following orders the cluster columns for output.
+  # comment lines below if you want columns preserve hierarchical order
+  cluster_cols <- setdiff(colnames(df_wide), "Symbol")
+  cluster_cols_sorted <- as.character(sort(as.numeric(cluster_cols)))
+  df_wide <- df_wide[, c("Symbol", cluster_cols_sorted)]
+  
+  
+  # write.table(df, file = file.path(output_dir, paste0(k, "_dotplot_", fun, "_expression_matrix.txt")), sep = "\t", quote = FALSE, col.names = NA)
+  write.table(df_wide, file = file.path(output_dir, paste0(k, "_dotplot_", fun, "_expression_matrix_wide.txt")), sep = "\t", quote = FALSE, col.names = NA)
+  
+  
+  dot_PLOT <- ggplot(df, aes(Symbol, Var2, col = value, size = fq, label = sprintf("%.2f", value))) +
+    geom_point() +
+    # geom_text(color = "black", size = 2.5, vjust = 0.5) +  # show mean/median value; comment out line if desired
+    scale_x_discrete("marker", limits = co, expand = c(0, 0.5)) +
+    scale_y_discrete("cluster_id", limits = ro, expand = c(0, 0.5)) +
+    scale_color_gradientn(lab, breaks = seq(0, 1, 0.5), colors = pal) +
+    scale_size_continuous(
+      range = c(0, 5),
+      labels = formatC(seq(0, 1, 0.25), 2, format = "f")
+    ) +
+    guides(
+      color = guide_colorbar(order = 1),
+      size = guide_legend("frac cells with expr. >\n global marker median")
+    ) +
+    coord_equal() +
+    theme_linedraw() +
+    theme(
+      panel.grid = element_blank(),
+      panel.border = element_blank(),
+      axis.text.x = element_text(angle = 45, hjust = 1)
+    )
+  return(dot_PLOT)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
