@@ -1500,7 +1500,7 @@ sce <- cluster(sce,
                features = type_markers,
                xdim = 10,
                ydim = 10,
-               maxK = maxk,
+               maxK = maxK,
                seed = 1234)
 
 
@@ -1514,11 +1514,15 @@ sce$meta25 <- cluster_ids(sce, "meta25")
 
 
 
-# FlowSOM
-n_components <- 6   # change as needed
-
+# FlowSOM on PCA
 fsom_dir <- file.path(res_dir, "FSOM", paste0("PC_", n_components))
 if (!dir.exists(fsom_dir)) dir.create(fsom_dir, recursive = TRUE)
+
+# run PCA
+pc_prop <- 0.75 # proportion of total features to use
+sce <- runPCA(sce, exprs_values = "exprs", ncomponents = floor(length(type_markers) * pc_prop))
+
+n_components <- 6   # change as needed
 
 # select data with desired PC
 pca_data <- reducedDim(sce, "PCA")
@@ -1630,52 +1634,58 @@ dev.off()
 dotplot_dir <- file.path(res_dir, "Dotplot", paste0("PC_", n_components))
 if (!dir.exists(dotplot_dir)) dir.create(dotplot_dir, recursive = TRUE)
 
-k <- "meta20_processed"
+k <- "meta20"
 fun <- "mean"
-dot_PLOT <- dotplot(sce, k = k, fun = fun, scale = FALSE, output_dir = dotplot_dir)
+dot_PLOT <- dotplot_FIX(sce, cluster_name = k, fun = fun, output_dir = dotplot_dir)
 
 file_name <- paste0(k, "_dotplot_", fun, ".png")
 ggsave(filename = file.path(dotplot_dir, file_name), plot = dot_PLOT, width = 10, height = 8)
 
 
-test_dir <- file.path(dotplot_dir, "TEST")
-if (!dir.exists(test_dir)) dir.create(test_dir, recursive = TRUE)
-dot_PLOT_TEST <- dotplot_4SDL(sce, k = k, fun = fun, scale = FALSE, output_dir = test_dir)
+test_dir_scaled <- file.path(dotplot_dir, "TEST/Scaled")
+if (!dir.exists(test_dir_scaled)) dir.create(test_dir_scaled, recursive = TRUE)
+
+test_dir_no_scaled <- file.path(dotplot_dir, "TEST/No_Scaled")
+if (!dir.exists(test_dir_no_scaled)) dir.create(test_dir_no_scaled, recursive = TRUE)
+
+k <- "meta20" # meta20, meta20_processed
+fun <- "mean"
+dot_PLOT_TEST <- dotplot_4SDL(sce, cluster_name = k, fun = fun, scale = TRUE, output_dir = test_dir_no_scaled)
 file_name <- paste0(k, "_dotplot_", fun, "_TEST", ".png")
-ggsave(filename = file.path(test_dir, file_name), plot = dot_PLOT, width = 10, height = 8)
+ggsave(filename = file.path(test_dir_no_scaled, file_name), plot = dot_PLOT, width = 10, height = 8)
 
 
 #-------------------------------------------------------------------------------
 # ANALYSIS - DETERMINE WHETHER FSOM CLUSTERING ON FULL MARKER DIM OR PC DIM IS BETTER/CONSISTENT
 #-------------------------------------------------------------------------------
+no_scaled_output_dir <- file.path(res_dir, "Dotplot/PC_6/TEST/No_Scaled")
 
 # load cross cluster prop matrix
 cross_clust_table_prop <- read.delim(file.path(cluster_info_dir, "meta20_cross_cluster_prop.txt"), header = TRUE, check.names = FALSE)
-cross_clust_prop_mat <- as.matrix(cross_cluster_table_prop)
+cross_clust_prop_mat <- as.matrix(cross_clust_table_prop)[, -1]
 
 # load raw & processed dotplot matrices
 # marker x cluster
-raw_dp <- read.delim(file.path(res_dir, "Dotplot/PC_6/meta20_dotplot_mean_expression_matrix_wide.txt"), header = TRUE, check.names = FALSE)
-proc_dp <- read.delim(file.path(res_dir, "Dotplot/PC_6/meta20_processed_dotplot_mean_expression_matrix_wide.txt"), header = TRUE, check.names = FALSE)
+raw_dp <- read.delim(file.path(res_dir, "Dotplot/PC_6/meta20_dotplot_mean_expr_matrix_wide.txt"), header = TRUE, check.names = FALSE)
+proc_dp <- read.delim(file.path(res_dir, "Dotplot/PC_6/meta20_processed_dotplot_mean_expr_matrix_wide.txt"), header = TRUE, check.names = FALSE)
 
 # order by markers for consistency
-common_markers <- intersect(raw_dp$Symbol, proc_dp$Symbol)
-raw_dp <- raw_dp[order(raw_dp$Symbol), ]
-proc_dp <- proc_dp[order(proc_dp$Symbol), ]
+# common_markers <- intersect(raw_dp$Symbol, proc_dp$Symbol)
+# raw_dp <- raw_dp[order(raw_dp$Symbol), ]
+# proc_dp <- proc_dp[order(proc_dp$Symbol), ]
 
 # only get numeric columns for correlation calculation
-raw_dp <- raw_dp[, !(names(raw_dp) %in% "Symbol")][, -1]
-rownames(raw_dp) <- NULL
+raw_dp <- raw_dp[, -1]
+proc_dp <- proc_dp[, -1]
 
-proc_dp <- proc_dp[, !(names(proc_dp) %in% "Symbol")][, -1]
-rownames(proc_dp) <- NULL
 
 # correlation matrix of raw & processed dotplot clusters
 # marker x cluster, so we do corr by column
 
 # raw_cluster x processed_cluster
 dp_corr_mat <- cor(raw_dp, proc_dp)
-write.table(dp_corr_mat, file = file.path(cluster_info_dir, paste0("meta", maxK, "_cross_cluster_dotplot_corr.txt")), sep = "\t", quote = FALSE, row.names = TRUE, col.names = NA)
+# NOTE: cluster_info_dir
+write.table(dp_corr_mat, file = file.path(no_scaled_output_dir, paste0("meta", maxK, "_cross_cluster_dotplot_corr.txt")), sep = "\t", quote = FALSE, row.names = TRUE, col.names = NA)
 hm <- Heatmap(dp_corr_mat,
               cluster_rows = FALSE,
               cluster_columns = FALSE,
@@ -1687,7 +1697,7 @@ hm <- Heatmap(dp_corr_mat,
               column_names_rot = 0,
               column_title = "Processed Clusters",
               column_title_side = "bottom")
-png(file.path(cluster_info_dir, "cross_cluster_dotplot_correlation.png"), width = 3000, height = 3000, res = 300)
+png(file.path(no_scaled_output_dir, "cross_cluster_dotplot_correlation.png"), width = 3000, height = 3000, res = 300)
 draw(hm, column_title = "Raw-Processed Cluster Correlation (from Dotplots)")
 dev.off()
 
@@ -1699,17 +1709,328 @@ dev.off()
 # dp_corr_mat :         raw_cluster x processed_cluster
 # cross_clust_prop_mat: raw_cluster x processed_cluster
 # cor() does column by default, so we transpose, then do cor()
-corr_mat <- cor(t(dp_corr_mat), t(cross_clust_prop_mat))
-write.table(corr_mat, file = file.path(cluster_info_dir, paste0("meta", maxK, "_corr_of_cross_cluster_prop_and_dotplot.txt")), sep = "\t", quote = FALSE, row.names = TRUE, col.names = NA)
-hm <- Heatmap(corr_mat,
+
+# corr_mat <- cor(t(dp_corr_mat), t(cross_clust_prop_mat))
+
+rows <- nrow(dp_corr_mat)
+corr_mat <- sapply(seq_len(rows), function(i) {
+  cor(dp_corr_mat[i, ], cross_clust_prop_mat[, i])
+})
+
+# create 1-column matrix from correlation vector to work with Heatmap()
+corr_mat_named <- matrix(corr_mat, ncol = 1)
+rownames(corr_mat_named) <- paste("Cluster", seq_along(corr_mat))
+colnames(corr_mat_named) <- "Correlation"
+
+hm <- Heatmap(corr_mat_named,
+              name = "Correlation",
               cluster_rows = FALSE,
               cluster_columns = FALSE,
               row_names_side = "left",
-              row_title = "Raw Clusters (Dotplot)",
+              column_names_side = "top",
+              column_names_rot = 0,
+              cell_fun = function(j, i, x, y, width, height, fill) {
+                grid.text(sprintf("%.2f", corr_mat_named[i, j]), x, y, gp = gpar(fontsize = 10))
+              })
+
+write.table(corr_mat_named, file = file.path(no_scaled_output_dir, paste0("meta", maxK, "_corr_of_cross_cluster_prop_and_dotplot.txt")), sep = "\t", quote = FALSE, row.names = TRUE, col.names = NA)
+png(file.path(no_scaled_output_dir, "corr_cross_cluster_prop_and_dotplot_corr_values.png"), width = 3000, height = 3000, res = 300)
+draw(hm, column_title = "Correlation of Cross Cluster Proportion Values & Cross Cluster Dotplot Correlation Values")
+dev.off()
+
+
+
+#-------------------------------------------------------------------------------
+# CHECK DOTPLOT
+#-------------------------------------------------------------------------------
+
+# parameters
+cluster_name <- "meta20"  # meta20, meta20_processed
+assay <- "exprs"
+fun <- "mean"
+scale <- FALSE
+pal <- hcl.colors(11, "viridis")
+output_dir <- file.path(res_dir, "Dotplot/PC_6/TEST")
+
+sce$cid_sel <- colData(sce)[[cluster_name]]
+
+es <- assay(sce, assay) # expression assay
+th <- rowMedians(es)  # median threshold
+
+cs <- seq_len(ncol(sce))  # indices vector with length = number of cells
+cs <- split(cs, sce$cid_sel)  # split indices into groups based on cid_sel
+
+# return fraction of cells per marker > median marker threshold
+fq <- sapply(cs, function(i) {
+  rowMeans(es[, i, drop = FALSE] > th)
+})
+
+lab <- paste(fun, assay)
+ms <- CATALYST:::.agg(sce, by = "cid_sel", assay = assay, fun = fun)
+
+# use "Symbol" marker name
+stopifnot(all(rownames(ms) %in% rownames(sce)))   # check
+marker_symbols <- rowData(sce)$Symbol[match(rownames(ms), rownames(sce))]
+rownames(ms) <- marker_symbols
+
+stopifnot(all(rownames(fq) %in% rownames(sce)))   # check
+marker_symbols <- rowData(sce)$Symbol[match(rownames(fq), rownames(sce))]
+rownames(fq) <- marker_symbols
+
+# long format for ggplot
+df <- melt(ms)            # melt(ms): Var1 = marker name, Var2 = cluster id, value = fun() value of marker across clusters
+df$fq <- melt(fq)$value   # melt(fq): Var1 = marker name, Var2 = cluster id, value = proportion > th
+
+colnames(df)[colnames(df) == "Var1"] <- "Symbol"
+colnames(df)[colnames(df) == "Var2"] <- "cluster"
+
+# need to turn cluster column into factor for ggplot
+df$cluster <- factor(df$cluster)
+
+ggplot(df, aes(Symbol, cluster, col = value, size = fq, label = sprintf("%.2f", value))) +
+  geom_point() +
+  # geom_text(color = "black", size = 2.5, vjust = 0.5) +  # show mean/median value; comment out line if desired
+  scale_x_discrete("marker", limits = marker_symbols, expand = c(0, 1)) +
+  scale_y_discrete("cluster_id", limits = unique(df$cluster), expand = c(0, 0.5)) +
+  scale_color_gradientn(lab, breaks = seq(0, 1, 0.5), colors = pal) +
+  scale_size_continuous(
+    range = c(0, 5),
+    labels = formatC(seq(0, 1, 0.25), 2, format = "f")
+  ) +
+  guides(
+    color = guide_colorbar(order = 1),
+    size = guide_legend("% cells with expr. above\n global marker median")
+  ) +
+  coord_equal() +
+  theme_linedraw() +
+  theme(
+    panel.grid = element_blank(),
+    panel.border = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.text.y = element_text(size = 8, margin = margin(r = 4))
+  )
+
+# save files
+write.table(ms, file = file.path(output_dir, "meta20_dotplot_mean_expression_matrix_wide.txt"), sep = "\t", quote = FALSE, col.names = NA)
+write.table(df, file = file.path(output_dir, "meta20_dotplot_all_data_long.txt"), sep = "\t", quote = FALSE, row.names = FALSE)
+
+
+
+#-------------------------------------------------------------------------------
+# CHECK DOTPLOT_4SDL()
+#-------------------------------------------------------------------------------
+
+# parameters
+cluster_name <- "meta20"  # meta20, meta20_processed
+assay <- "exprs"
+fun <- "mean"
+scale <- TRUE
+pal <- hcl.colors(11, "viridis")
+scaled_output_dir <- file.path(res_dir, "Dotplot/PC_6/TEST/Scaled")
+
+# this allows us to select both raw (from FSOM cluster()) & processed clusters
+sce$cid_sel <- colData(sce)[[cluster_name]]
+
+es <- assay(sce, assay) # expression matrix
+th <- rowMedians(es)  # median threshold
+
+cs <- seq_len(ncol(sce))  # indices vector with length = number of cells
+cs <- split(cs, sce$cid_sel)   # split indices into groups based on cid_sel
+
+# return fraction of cells > th per marker
+fq <- sapply(cs, function(i) {
+  rowMeans(es[, i, drop = FALSE] > th)
+})
+
+# compute mean/median expression by cluster
+lab <- paste(fun, assay)
+ms <- CATALYST:::.agg(sce, by = "cid_sel", assay = assay, fun = fun)
+
+# scale = TRUE
+lab <- paste("scaled", lab)
+scale_level <- seq(0, 1, by = 0.1)
+scale_label <- scale_level[-1]
+qq_th <- rowQuantiles(es, probs = scale_level)
+
+for (i in seq_len(nrow(qq_th))) {
+  zero_num <- sum(qq_th[i, ] == 0)
+  if (zero_num > 1) {
+    qq_th[i, 1:zero_num] <- seq(0, qq_th[i, (zero_num + 1)],
+                               qq_th[i, (zero_num + 1)] / zero_num)[1:zero_num]
+  }
+}
+qq_th[, ncol(qq_th)] <- Inf
+
+ms_glob <- t(sapply(1:nrow(ms), function(i) cut(ms[i, ], qq_th[i, ], labels = scale_label)))
+ms_glob <- ifelse(is.na(ms_glob), 0, ms_glob)
+rownames(ms_glob) <- rownames(ms)
+
+ms <- matrix(as.numeric(ms_glob), nrow = nrow(ms_glob), ncol = ncol(ms_glob), dimnames = list(rownames(ms_glob), colnames(ms)))
+
+# use "Symbol" marker name
+stopifnot(all(rownames(ms) %in% rownames(sce)))   # check
+marker_symbols <- rowData(sce)$Symbol[match(rownames(ms), rownames(sce))]
+rownames(ms) <- marker_symbols
+
+# long format for ggplot
+df <- melt(ms)            # melt(ms): Var1 = marker name, Var2 = cluster id, value = fun() value of marker across clusters
+df$fq <- melt(fq)$value   # melt(fq): Var1 = marker name, Var2 = cluster id, value = proportion > th
+
+colnames(df)[colnames(df) == "Var1"] <- "Symbol"
+colnames(df)[colnames(df) == "Var2"] <- "cluster"
+
+# need to turn cluster column into factor for ggplot
+df$cluster <- factor(df$cluster)
+
+dot_PLOT <- ggplot(df, aes(Symbol, cluster, col = value, size = fq, label = sprintf("%.2f", value))) +
+  geom_point() +
+  # geom_text(color = "black", size = 2.5, vjust = 0.5) +  # show mean/median value; comment out line if desired
+  scale_x_discrete("marker", limits = marker_symbols, expand = c(0, 1)) +
+  scale_y_discrete("cluster_id", limits = unique(df$cluster), expand = c(0, 0.5)) +
+  scale_color_gradientn(lab, breaks = seq(0, 1, 0.5), colors = pal) +
+  scale_size_continuous(
+    range = c(0, 5),
+    labels = formatC(seq(0, 1, 0.25), 2, format = "f")
+  ) +
+  guides(
+    color = guide_colorbar(order = 1),
+    size = guide_legend("frac cells with expr >\n global marker median")
+  ) +
+  coord_equal() +
+  theme_linedraw() +
+  theme(
+    panel.grid = element_blank(),
+    panel.border = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.text.y = element_text(size = 8, margin = margin(r = 4))
+  )
+
+# save files
+write.table(ms, file = file.path(scaled_output_dir, paste0(cluster_name, "_dotplot_", fun, "_expr_matrix_wide.txt")), sep = "\t", quote = FALSE, col.names = NA)
+write.table(df, file = file.path(scaled_output_dir, paste0(cluster_name, "_dotplot_", fun, "_all_data_long.txt")), sep = "\t", quote = FALSE, row.names = FALSE)
+
+file_name <- paste0(cluster_name, "_dotplot_", fun, ".png")
+ggsave(filename = file.path(scaled_output_dir, file_name), plot = dot_PLOT, width = 10, height = 8)
+
+
+#-------------------------------------------------------------------------------
+# ANALYSIS - DETERMINE WHETHER FSOM CLUSTERING ON FULL MARKER DIM OR PC DIM IS BETTER/CONSISTENT
+# SCALED DATA
+#-------------------------------------------------------------------------------
+scaled_output_dir <- file.path(res_dir, "Dotplot/PC_6/TEST/Scaled")
+maxK <- 20
+
+# load cross cluster prop matrix
+cross_clust_table_prop <- read.delim(file.path(cluster_info_dir, "meta20_cross_cluster_prop.txt"), header = TRUE, check.names = FALSE)
+cross_clust_prop_mat <- as.matrix(cross_clust_table_prop)[, -1]
+
+# load raw & processed dotplot matrices
+# marker x cluster
+raw_dp <- read.delim(file.path(res_dir, "Dotplot/PC_6/TEST/Scaled/meta20_dotplot_mean_expr_matrix_wide.txt"), header = TRUE, check.names = FALSE)
+proc_dp <- read.delim(file.path(res_dir, "Dotplot/PC_6/TEST/Scaled/meta20_processed_dotplot_mean_expr_matrix_wide.txt"), header = TRUE, check.names = FALSE)
+
+# order by markers for consistency
+# common_markers <- intersect(raw_dp$Symbol, proc_dp$Symbol)
+# raw_dp <- raw_dp[order(raw_dp$Symbol), ]
+# proc_dp <- proc_dp[order(proc_dp$Symbol), ]
+
+# only get numeric columns for correlation calculation
+raw_dp <- raw_dp[, -1]
+proc_dp <- proc_dp[, -1]
+
+
+# correlation matrix of raw & processed dotplot clusters
+# marker x cluster, so we do corr by column
+
+# raw_cluster x processed_cluster
+dp_corr_mat <- cor(raw_dp, proc_dp)
+write.table(dp_corr_mat, file = file.path(scaled_output_dir, paste0("meta", maxK, "_cross_cluster_dotplot_corr.txt")), sep = "\t", quote = FALSE, row.names = TRUE, col.names = NA)
+hm <- Heatmap(dp_corr_mat,
+              cluster_rows = FALSE,
+              cluster_columns = FALSE,
+              show_row_names = TRUE,
+              show_column_names = TRUE,
+              row_names_side = "left",
+              row_title = "Raw Clusters",
               column_names_side = "bottom",
               column_names_rot = 0,
-              column_title = "Raw Clusters (Cell Distribution)",
+              column_title = "Processed Clusters",
               column_title_side = "bottom")
-png(file.path(cluster_info_dir, "corr_cross_cluster_prop_and_dotplot_corr_values.png"), width = 3000, height = 3000, res = 300)
-draw(hm, column_title = "Correlation of Cross Cluster Proportion Values & Cross Cluster Dotplot Correlation Values (Using Raw/Row Reference")
+png(file.path(scaled_output_dir, "cross_cluster_dotplot_correlation.png"), width = 3000, height = 3000, res = 300)
+draw(hm, column_title = "Raw-Processed Cluster Correlation (from Dotplots)")
 dev.off()
+
+
+
+# correlate raw-processed dotplot corr matrix with cross_cluster_table_prop
+# correlate row-wise (raw cluster)
+
+# dp_corr_mat :         raw_cluster x processed_cluster
+# cross_clust_prop_mat: raw_cluster x processed_cluster
+# cor() does column by default, so we transpose, then do cor()
+
+# corr_mat <- cor(t(dp_corr_mat), t(cross_clust_prop_mat))
+
+rows <- nrow(dp_corr_mat)
+corr_mat <- sapply(seq_len(rows), function(i) {
+  cor(dp_corr_mat[i, ], cross_clust_prop_mat[, i])
+})
+
+# create 1-column matrix from correlation vector to work with Heatmap()
+corr_mat_named <- matrix(corr_mat, ncol = 1)
+rownames(corr_mat_named) <- paste("Cluster", seq_along(corr_mat))
+colnames(corr_mat_named) <- "Correlation"
+
+hm <- Heatmap(corr_mat_named,
+              name = "Correlation",
+              cluster_rows = FALSE,
+              cluster_columns = FALSE,
+              row_names_side = "left",
+              column_names_side = "top",
+              column_names_rot = 0,
+              cell_fun = function(j, i, x, y, width, height, fill) {
+                grid.text(sprintf("%.2f", corr_mat_named[i, j]), x, y, gp = gpar(fontsize = 10))
+              })
+
+write.table(corr_mat_named, file = file.path(scaled_output_dir, paste0("meta", maxK, "_corr_of_cross_cluster_prop_and_dotplot.txt")), sep = "\t", quote = FALSE, row.names = TRUE, col.names = NA)
+png(file.path(scaled_output_dir, "corr_cross_cluster_prop_and_dotplot_corr_values.png"), width = 3000, height = 3000, res = 300)
+draw(hm, column_title = "Correlation of Cross Cluster Proportion Values & Cross Cluster Dotplot Correlation Values")
+dev.off()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
