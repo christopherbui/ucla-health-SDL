@@ -36,7 +36,7 @@ library(progress)   # progress bar
 
 source(paste("U:/cdbui/MPE_Cytof/Rscript/", "Rybakowska_cytof_function.R", sep = ""))
 source("C:/Users/cdbui/Documents/GitHub/ucla-health-SDL/cytof-pipeline/MPE_Cytof/Rscript/Rybakowska_cytof_function_LT.R")
-
+source("C:/Users/cdbui/Documents/GitHub/ucla-health-SDL/cytof-pipeline/MPE_Cytof/Rscript/Cytof_MPE_Utils.R")
 
 # set working directory
 workFolder <- paste("U:/cdbui/", "MPE_Cytof", sep = "")
@@ -1101,38 +1101,6 @@ draw(marker_heatmap_PLOT, heatmap_legend_side = "bottom", padding = unit(c(10, 1
 dev.off()
 
 
-
-################################################################################
-# ANALYSIS - SEPARATE BY TISSUE TYPE
-################################################################################
-
-# select panel
-selPanel <- c("TBNK")
-# selPanel <- c("Myeloid")
-# selPanel <- c("Cytokines")
-
-# select tissue type
-# selTissue <- "MPE"
-selTissue <- "PBMC"
-
-# create directory to hold results by tissue type
-analysis_dir <- file.path(workFolder, "CYTOF_data", "Analysis", selPanel)
-if (!dir.exists(analysis_dir)) dir.create(analysis_dir, recursive = TRUE)
-
-res_dir <- file.path(analysis_dir, paste0("Res_", selTissue, "_ONLY"))
-if (!dir.exists(res_dir)) dir.create(res_dir, recursive = TRUE)
-
-# set input directory
-norm_dir <- file.path(workFolder, "CYTOF_data", "CytoNormed", selPanel, "updateFileName")
-
-
-fcs_files <- list.files(norm_dir,
-                        pattern = paste0(".*", selTissue, ".*\\.fcs$"),
-                        full.names = TRUE)
-
-
-
-
 ################################################################################
 # ANALYSIS - ALL SAMPLES ; LINEAGE MARKERS ONLY
 ################################################################################
@@ -1454,6 +1422,7 @@ rowData(sce)$Symbol <- matched_symbols
 #-------------------------------------------------------------------------------
 # FULL Lineage Markers
 type_markers <- rownames(sce)[rowData(sce)$marker_class == "type"]
+
 # subset sce for markers; reassign 'sce' to save memory
 sce <- sce[type_markers, ]
 #-------------------------------------------------------------------------------
@@ -2161,3 +2130,15 @@ write.table(stats, file = file.path(res_dir, paste0("subset_lineage_cluster_", m
 
 
 
+# marker %tiles
+tbnk_marker_info <- calculate_marker_quantiles(sce)
+file_name <- file.path(analysis_dir, "TBNK_Marker_Stats_Full_Lineage.txt")
+write.table(tbnk_marker_info, file = file_name, sep = "\t", quote = FALSE, row.names = TRUE, col.names = NA)
+
+myeloid_marker_info <- calculate_marker_quantiles(sce)
+file_name <- file.path(analysis_dir, "Myeloid_Marker_Stats_Full_Lineage.txt")
+write.table(myeloid_marker_info, file = file_name, sep = "\t", quote = FALSE, row.names = TRUE, col.names = NA)
+
+cytokine_marker_info <- calculate_marker_quantiles(sce)
+file_name <- file.path(analysis_dir, "Cytokine_Marker_Stats_Full_Lineage.txt")
+write.table(cytokine_marker_info, file = file_name, sep = "\t", quote = FALSE, row.names = TRUE, col.names = NA)
