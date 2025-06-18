@@ -78,20 +78,25 @@ get_pca_variance_explained <- function(sce) {
 
 #' Plot elbow curve
 #'
-#' @param elbow_df Dataframe to plot containing PC numbers and variance explained
+#' @param var_percent vector of PC variance explained, of PC percent of variance explained
 #'
 #' @returns Eblow plot (ggplot object)
 #' 
-plot_elbow_plot <- function(elbow_df) {
+plot_elbow_plot <- function(var_percent) {
+  elbow_df <- data.frame(
+    PC = seq_along(var_percent),
+    VarianceExplained = var_percent
+  )
+  
   elbow_PLOT <- ggplot(elbow_df, aes(x = PC, y = VarianceExplained)) +
     geom_point(color = "#4287f5", size = 2) +
     geom_line(color = "#4287f5", linewidth = 0.9) +
-    geom_text(aes(label = round(VarianceExplained, 2)),  # label each point
+    geom_text(aes(label = round(VarianceExplained, 2)),
               hjust = -0.5, vjust = -0.5, size = 3.5) +
-    scale_x_continuous(breaks = elbow_df$PC) +           # show all PC numbers on axis
-    labs(title = paste0("PCA Elbow Plot", " - ", selPanel, " Reference"),
+    scale_x_continuous(breaks = seq_along(var_percent)) +
+    labs(title = paste0("PCA Elbow Plot", " - ", selPanel),
          x = "Principal Component",
-         y = "Proportion of Variance Explained") +
+         y = "Percent of Variance Explained") +
     theme_light(base_size = 14)
   
   return(elbow_PLOT)

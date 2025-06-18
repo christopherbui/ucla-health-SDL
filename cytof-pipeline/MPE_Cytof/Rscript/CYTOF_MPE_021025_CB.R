@@ -34,12 +34,12 @@ library(FlowSOM)
 
 library(progress)   # progress bar
 
-source(paste("U:/cdbui/MPE_Cytof/Rscript/", "Rybakowska_cytof_function.R", sep = ""))
-source("C:/Users/cdbui/Documents/GitHub/ucla-health-SDL/cytof-pipeline/MPE_Cytof/Rscript/Rybakowska_cytof_function_LT.R")
-source("C:/Users/cdbui/Documents/GitHub/ucla-health-SDL/cytof-pipeline/MPE_Cytof/Rscript/Cytof_MPE_Utils.R")
+source(paste0("U:/cdbui/MPE_Cytof/Rscript/Christopher_Scripts/", "Rybakowska_cytof_function.R"))
+source(paste0("U:/cdbui/MPE_Cytof/Rscript/Christopher_Scripts/", "Rybakowska_cytof_function_LT.R"))
+source(paste0("U:/cdbui/MPE_Cytof/Rscript/Christopher_Scripts/", "Cytof_MPE_Utils.R"))
 
 # set working directory
-workFolder <- paste("U:/cdbui/", "MPE_Cytof", sep = "")
+workFolder <- paste0("U:/cdbui/", "MPE_Cytof")
 setwd(workFolder)
 
 
@@ -47,6 +47,8 @@ setwd(workFolder)
 fin_info <- file.path("Ranalysis","mpe_cytof_sampleInfo_022625.txt")
 allSampleInfo <- read.delim(fin_info, sep = "\t", header = TRUE, stringsAsFactors = FALSE)
 allSampleInfo <- allSampleInfo[, -1]
+
+
 
 
 # ------------------------------------------------------------------------------
@@ -105,45 +107,8 @@ write.table(Ftab_quantile_ref, file.path(panel_output_dir, quantiles_ref_file), 
 
 
 
-
-# define ncols for ggplot2 below
-ncols <- 4
-
-sel_marker4plot <- panel_info$fcs_desc[1:14]
-tmp4plot <- subset(quantiles_ref ,
-    is.element(quantiles_ref$Marker,sel_marker4plot))
-p_x <- tmp4plot %>%   
-    ggplot2::ggplot(aes(x = Sample,
-               y = Value,
-               color = Marker)) +
-    geom_point() +
-     ylab(label = sel_marker4plot)+  
-    facet_wrap(~ Marker, ncol = ncols, scales = "free_x") +
-    theme_minimal() + 
-    theme(axis.text.x = element_text(angle = 90, hjust = 1),
-          panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-          legend.position = "bottom")
-
-# plot range (0.25,0.99) and median
-sel_marker4plot <- panel_info$fcs_desc[1:9]
-tmp4plot <- subset(Ftab_quantile_ref,
-    is.element(quantiles_ref$Marker,sel_marker4plot))
-p_y <- tmp4plot %>%   
-    ggplot2::ggplot(aes(x = Sample,
-               y = Value.0.5,
-               color = Batch)) +
-    geom_pointrange(aes(ymin = Value.0.25, ymax = Value.0.99)) +
-    facet_wrap(~ Marker, scales = "free_x") +
-    theme_minimal() + 
-    theme(axis.text.x = element_text(angle = 90, hjust = 1),
-          panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-          legend.position = "bottom")
-
-
-
-
 # --------------------------------------------------------------
-# Check panel expression in each reference Cytokine/Myeloid/TBNK cells
+# Check panel expression for reference samples
 # 2/28/25
 # --------------------------------------------------------------
 
@@ -158,23 +123,6 @@ sampleInfo  <- dplyr::filter(allSampleInfo, panel_id == selPanel & patient_id ==
 fin_panel <- paste(selPanel, "_markers_022625.txt", sep = "")
 panel_info <- read.delim(file.path("Ranalysis", fin_panel), sep = "\t", header = TRUE, stringsAsFactors = FALSE)
 
-## get channel information for fsom
-# lineage_idx <- which(panel_info$marker_class=="lineage")  #****
-# lineage_markers <- panel_info$fcs_desc[lineage_idx]  
-# function_idx <- which(panel_info$marker_class=="function")  #****
-# function_markers <- panel_info$fcs_desc[function_idx] 
-# 
-# ## setup panel input for CATALYST, requiring 3 columns
-# tmp_panel <- panel_info[,c("fcs_colname", "antigen", "marker_class")]
-# 
-# tmpi <- which(grepl("function", panel_info$marker_class) == TRUE)
-# tmp_panel$marker_class[tmpi] <- c("state")
-# 
-# tmpi <- which(panel_info$marker_class=="lineage")
-# tmp_panel$marker_class[tmpi] <- c("type")
-
-#---------------------
-
 # set input folder
 bead_norm_dir <- file.path(workFolder, "CYTOF_data", "BeadNorm", selPanel)
 
@@ -182,25 +130,6 @@ bead_norm_dir <- file.path(workFolder, "CYTOF_data", "BeadNorm", selPanel)
 all_fcs_files <- list.files(bead_norm_dir,
                             pattern = "_Ref.*\\.fcs$",
                             full.names = TRUE)
-
-
-# # set input folder
-# bead_norm_dir <- file.path(workFolder,"CYTOF_data",
-#                            "Gated",selPanel)
-# all_fcs_files <- list.files(bead_norm_dir, 
-#                             pattern = ".fcs$", 
-#                             full.names = TRUE)
-# 
-# # set input folder
-# bead_norm_dir <- file.path(workFolder,"CYTOF_data",
-#                            "Gated_2gates",selPanel)
-# all_fcs_files <- list.files(bead_norm_dir, 
-#                             pattern = ".fcs$", 
-#                             full.names = TRUE)
-
-
-#---------------------
-
 
 # non-transformed data
 nfiles <- length(all_fcs_files)
@@ -233,8 +162,8 @@ Batch <- sapply(Ftab[,1],
 Ftab_out <- Ftab %>% mutate(Batch=Batch)
 
 fout <- paste(selPanel,"_beadNorm_nonTransform_qc.txt",sep="")
-write.table(Ftab_out,file.path(panel_output_dir, fout),
-            sep="\t",quote=F,row.names=FALSE)
+write.table(Ftab_out, file.path(panel_output_dir, fout),
+            sep="\t", quote=F,row.names=FALSE)
 
 
 
@@ -275,15 +204,6 @@ fout <- paste(selPanel,"_beadNorm_arcsinhTransform_qc.txt",sep="")
 write.table(Ftab_out,file.path(panel_output_dir, fout),
             sep="\t",quote=F,row.names=FALSE)
 
-# # ------
-# fout <- paste(selPanel,"_cleanedGated_arcsinhTransform_qc.txt",sep="")
-# write.table(Ftab_out,file.path("Ranalysis",fout),
-#             sep="\t",quote=F,row.names=FALSE)
-# # -----
-# fout <- paste(selPanel,"_cleanedGated2gates_arcsinhTransform_qc.txt",sep="")
-# write.table(Ftab_out,file.path("Ranalysis",fout),
-#             sep="\t",quote=F,row.names=FALSE)
-
 
 
 
@@ -302,24 +222,6 @@ bead_norm_dir <- file.path(workFolder, "CYTOF_data", "BeadNorm", selPanel)
 all_fcs_files <- list.files(bead_norm_dir,
                             pattern = ".fcs$",
                             full.names = TRUE)
-
-
-
-# setup input folder
-# bead_norm_dir <- file.path(workFolder,"CYTOF_data",
-#                            "Gated",selPanel)
-# all_fcs_files <- list.files(bead_norm_dir, 
-#                             pattern = ".fcs$", 
-#                             full.names = TRUE)
-# 
-# bead_norm_dir <- file.path(workFolder,"CYTOF_data",
-#                            "Cleaned",selPanel)
-# all_fcs_files <- list.files(bead_norm_dir, 
-#                             pattern = ".fcs$", 
-#                             full.names = TRUE)
-
-# -----------------------
-
 
 # normalized, uncleaned
 nfiles <- length(all_fcs_files)
@@ -353,8 +255,6 @@ write.table(Ftab,
             quote=F,
             row.names=FALSE)
 
-
-
 # ------------------------------------------------------------
 
 library(ggcyto)
@@ -365,9 +265,6 @@ f <- flowCore::read.FCS(fcs_files[i])
 keyword(f, "$FIL")
 
 spillover(f)
-# Error in .local(x, ...) : No spillover matrix stored in that sample
-# Error in .local(x, ...) : No spillover matrix stored in that sample
-# Error in .local(x, ...) : No spillover matrix stored in that sample
 
 tmp_channels <- colnames(f)
 channel_info <- pData(parameters(f))
@@ -379,16 +276,14 @@ ggcyto::autoplot(f, "Pt198Di")
 
 
 
+
 # ------------------------------------------------------------------------------
 # Signal Cleaning
 #-------------------------------------------------------------------------------
 
-# list_panels <- c("TBNK","Myeloid","Cytokines")
-
-# list_panels <- c("TBNK")
+list_panels <- c("TBNK")
 # list_panels <- c("Myeloid")
-list_panels <- c("Cytokines")
-
+# list_panels <- c("Cytokines")
 
 seg_threshold <- 500
 
@@ -439,7 +334,7 @@ for (selPanel in list_panels){
     ff <- flowCore::read.FCS(filename = file,
                              transformation = FALSE)
     
-    
+    # Note: flowAI doesn't work
     # clean flow rate: use flowAI using Time
     # using single function flow_auto_qc
     # ff <- flowAI::flow_auto_qc(file,
@@ -476,21 +371,21 @@ for (selPanel in list_panels){
 
 
 
+
 # ------------------------------------------------------------------------------
-# Files outliers detection
-# output is the score from fsom
+# Outlier Detection
+# 
+# Note: output is the score from fsom
 #-------------------------------------------------------------------------------
 
-# list_panels <- c("TBNK","Myeloid","Cytokines")
-
-# list_panels <- c("TBNK")
-list_panels <- c("Myeloid")
+list_panels <- c("TBNK")
+# list_panels <- c("Myeloid")
 # list_panels <- c("Cytokines")
 
 batch4extractPatt <- "(?i).*(batch[0-9]*).*.fcs"
 dna_ch_4fsom <- c("191Ir","193Ir")   #*****using desc column
 via_ch_4fsom <- c("195Pt")    #***Cisplatin
-# nCells_thres <- c(10000,3000,1000)   #*****
+
 nCells_thres <- c(500)
 
 
@@ -547,7 +442,10 @@ for (k in c(1:length(list_panels))){
 
 
 
+
 # ------------------------------------------------------------------------------
+# Gating
+
 # Files gating using new strategies:--> *_4SDL functions
 # for intact: single low threshold for Ir191 and Ir193 (i.e. >thres)
 # for live: only use viability channel(cisplatin - i.e. < thres)
@@ -653,7 +551,12 @@ message("Ended: ", format(Sys.time(), tz = "America/Los_Angeles"))
 
 
 # ------------------------------------------------------------------------------
-# Normalization using reference sample
+# Normalization Using Reference Samples
+#
+# Note: 6/17/2025
+#   - SKIPPED normalization due to some reference samples causing bugs during outlier step.
+#   - Affected Panels: TBNK, Cytokine
+#   - All Myeloid samples passed through outlier step ok.
 #-------------------------------------------------------------------------------
 
 # select panel
@@ -740,15 +643,15 @@ CytoNorm::QuantileNorm.normalize(model = model,
 
 
 
+
 # ------------------------------------------------------------------------------
 # Change $FIL for normalized, gated files
+#
+# Note: 6/17/2025 
+#   - Changed $FIL for UN-Normalized, gated files to keep workflow consistent
+#     while skipping normalization.
 #-------------------------------------------------------------------------------
-# Normally, we have to change $FIL for normalized gated files.
-# But we will use only gated data for changing $FIL & downstream flowSOM & UMAP; Problem with some reference files
 
-
-# update '$FIL' in fcs files --> output in the subfolder, "updateFileName"
-# Set input directory 
 # selPanel <- c("TBNK")
 selPanel <- c("Myeloid")
 # selPanel <- c("Cytokines")
@@ -2142,3 +2045,243 @@ write.table(myeloid_marker_info, file = file_name, sep = "\t", quote = FALSE, ro
 cytokine_marker_info <- calculate_marker_quantiles(sce)
 file_name <- file.path(analysis_dir, "Cytokine_Marker_Stats_Full_Lineage.txt")
 write.table(cytokine_marker_info, file = file_name, sep = "\t", quote = FALSE, row.names = TRUE, col.names = NA)
+
+
+
+# ------------------------------------------------------------------------------
+# MAIN ANALYSIS
+# 6/17/2025
+# ------------------------------------------------------------------------------
+
+# get sample info
+fin_info <- file.path("Ranalysis","mpe_cytof_sampleInfo_022625.txt")
+allSampleInfo <- read.delim(fin_info, sep = "\t", header = TRUE, stringsAsFactors = FALSE)
+allSampleInfo <- allSampleInfo[, -1]
+
+# select panel
+selPanel <- c("TBNK")
+# selPanel <- c("Myeloid")
+# selPanel <- c("Cytokines")
+
+# get panel info
+fin_panel <- paste(selPanel, "_markers_022625.txt", sep="")
+panel_info <- read.delim(file.path("Ranalysis", fin_panel), sep = "\t", header = TRUE, stringsAsFactors = FALSE)
+
+# get channel info for fsom
+lineage_idx <- which(panel_info$marker_class == "lineage")
+lineage_markers <- panel_info$fcs_desc[lineage_idx]
+function_idx <- which(panel_info$marker_class == "function")
+function_markers <- panel_info$fcs_desc[function_idx]
+
+# set panel input for CATALYST, requires 3 columns
+tmp_panel <- panel_info[, c("fcs_colname", "antigen", "marker_class")]
+tmpi <- which(grepl("function", panel_info$marker_class) == TRUE)
+tmp_panel$marker_class[tmpi] <- c("state")
+tmpi <- which(panel_info$marker_class == "lineage")
+tmp_panel$marker_class[tmpi] <- c("type")
+
+
+
+
+# set input directory
+norm_dir <- file.path(workFolder, "CYTOF_data", "CytoNormed", selPanel, "updateFileName")
+
+# set parent output directory
+analysis_dir <- file.path(workFolder, "CYTOF_data", "Analysis", selPanel)
+if (!dir.exists(analysis_dir)) dir.create(analysis_dir, recursive = TRUE)
+
+# set results directory
+res_dir <- file.path(analysis_dir, "Results")
+if (!dir.exists(res_dir)) dir.create(res_dir, recursive = TRUE)
+
+
+
+# get fcs files
+fcs_files <- list.files(norm_dir,
+                        pattern = ".fcs$",
+                        full.names = TRUE)
+
+# get fcs corename
+tmp_core <- sapply(basename(fcs_files), getCoreID, simplify = TRUE)
+
+# match filenames and metadata
+# prepare metadata for CATALYST
+sampleInfo <- dplyr::filter(allSampleInfo, panel_id == selPanel)
+md_info <- left_join(data.frame(file = basename(fcs_files), sample_id = tmp_core),
+                     sampleInfo[, -1],
+                     by = join_by(sample_id == corename))
+
+md_info$BATCH <- factor(md_info$BATCH)
+
+# import fcs as sce object (arcsinh, transform = TRUE by default)
+sce <- CATALYST::prepData(fcs_files,
+                          panel = tmp_panel, # panel marker info
+                          md = md_info, # sample info
+                          panel_cols = list(channel = "fcs_colname", antigen = "antigen", class = "marker_class"),
+                          md_cols = list(file = "file", id = "sample_id", factors = c("tissue_type", "patient_id", "parental_sample_id", "BATCH")))
+
+SummarizedExperiment(sce)
+
+colData(sce)$sample_id <- droplevels(colData(sce)$sample_id)
+
+# add "Symbol" marker names for plotting; preferred for publishing
+matched_symbols <- panel_info$Symbol[match(rownames(sce), panel_info$antigen)]
+rowData(sce)$Symbol <- matched_symbols
+
+
+# ------------------------------------------------------------------------------
+# General SCE Object Info
+# ------------------------------------------------------------------------------
+
+# check distribution of markers
+tmp2 <- t(apply(assay(sce, "exprs"), 1, function(x) quantile(x, c(0.5, 0.75, 0.9, 0.95, 1))))
+tmp_mean <- rowMeans(assay(sce, "exprs"))
+tmpout <- bind_cols(tmp_mean, tmp2)
+colnames(tmpout)[1] <- c("mean")
+tmpout$marker <- rowData(sce)$Symbol
+
+write.table(tmpout,"tmp.txt",sep="\t",quote=F,row.names=F)
+
+
+
+# number of events per file
+tmp <- table(colData(sce)$sample_id)    # number of events per file
+tmp_2 <- data.frame(tmp)
+colnames(tmp_2)[1] <- c("sample_id")
+
+tmp_2 <- left_join(tmp_2, md_info, by = join_by(sample_id))
+kruskal.test(tmp_2$Freq~factor(tmp_2$BATCH))
+# Kruskal-Wallis rank sum test
+# 
+# data:  tmp_2$Freq by factor(tmp_2$BATCH)
+# Kruskal-Wallis chi-squared = 5.2016, df = 6, p-value = 0.5182
+tmp_2$BATCH <- factor(tmp_2$BATCH)
+
+tissue_freq_by_batch_PLOT <- ggplot(tmp_2, aes(x = BATCH, y = Freq)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(aes(color = tissue_type), width = 0.25) +
+  scale_y_continuous(trans = "log10") + theme_bw()
+
+file_name <- paste0(selPanel, "_tissue_freq_by_batch", ".png")
+ggsave(filename = file.path(analysis_dir, file_name), plot = tissue_freq_by_batch_PLOT)
+
+write.table(tmp, file.path(analysis_dir, "num_events_per_sample.txt"), sep = "\t", quote = FALSE, col.names = FALSE)
+
+
+
+# plot distribution of markers
+color_by <- "BATCH"
+marker_dist_PLOT <- plotExprs(sce, color_by = color_by)
+
+file_name <- paste0("marker_distribution_by_", color_by, ".png")
+ggsave(filename = file.path(analysis_dir, file_name), plot = marker_dist_PLOT, width = 10, height = 7)
+
+
+
+# plot mulit-dimension scale (median marker intensities)
+color_by <- "BATCH"
+label_by <- "sample_id"
+pb_mds_PLOT <- pbMDS(sce, color_by = color_by, label_by = label_by)
+
+file_name <- paste0("Ref_pbMDS_by_", color_by, "_", label_by, ".png")
+ggsave(filename = file.path(analysis_dir, file_name), plot = pb_mds_PLOT, width = 8, height = 6)
+
+
+
+
+# heatmap of median marker intensities
+# in CyTOF applications, a cosine distance shows good performance
+# scale = "last": aggregate then scale & trim
+marker_heatmap_PLOT <- plotExprHeatmap(sce,
+                                       scale = "last",
+                                       row_anno = FALSE,
+                                       col_anno = FALSE)
+
+file_name <- paste0("expr_heatmap_all_markers", ".png")
+png(file.path(analysis_dir, file_name), width = 14, height = 8, units = "in", res = 300)
+draw(marker_heatmap_PLOT)
+dev.off()
+
+
+# ------------------------------------------------------------------------------
+
+# lineage markers
+type_markers <- rownames(sce)[rowData(sce)$marker_class == "type"]
+
+# select markers
+sel_markers <- type_markers
+
+# partition sce object for selected markers
+sce_sub <- sce[sel_markers, ]
+
+
+
+# set cluster info directory
+cluster_info_dir <- file.path(res_dir, "Cluster_Info")
+if (!dir.exists(cluster_info_dir)) dir.create(cluster_info_dir, recursive = TRUE)
+
+
+# FSOM
+maxk <- 20
+sce_sub <- cluster(sce_sub,
+                   features = sel_markers,
+                   xdim = 10,
+                   ydim = 10,
+                   maxK = maxk,
+                   seed = 1234)
+
+
+# matrix showing relationship between SOM (n=100) and consensus cluster (metaX)
+tmp_cluster_codes <- cluster_codes(sce_sub)
+
+# add meta clusters to column data
+sce_sub$meta20 <- cluster_ids(sce_sub, "meta20")
+
+# export expression of cluster data
+sel_metaK <- c("meta8")   # consensus cluster level or SOM
+sel_aggregate <- c("median")
+
+raw_clust_expr <- CATALYST:::.agg(sce_sub, by = sel_metaK, assay = "exprs", fun = sel_aggregate)
+raw_clust_expr_df <- as.data.frame(raw_clust_expr)
+raw_clust_expr_df <- tibble::rownames_to_column(raw_clust_expr_df, "marker")
+
+file_name <- paste0(sel_metaK, "_", sel_aggregate , "_expr_matrix", ".txt")
+write.table(raw_clust_expr_df, file.path(cluster_info_dir, file_name), sep = "\t", quote = FALSE, row.names=FALSE)
+
+
+
+
+# PCA
+pc_prop <- 0.75 #*** proportion of total features to use
+no_pcs <- floor(nrow(sce_sub) * pc_prop)
+sce_sub <- runPCA(sce_sub, exprs_values = "exprs", ncomponents = floor(nrow(sce_sub) * pc_prop))
+
+reducedDimNames(sce_sub)  #"PCA"
+dim(reducedDim(sce_sub,"PCA"))   #ncells x no_pc
+
+
+# elbow plot
+pca_matrix <- reducedDim(sub_sce, "PCA")
+
+# either for non-normalized (sum<1)
+var_explained <- attr(pca_matrix,"varExplained")  #***non-normalize to 1
+var_percent <- attr(pca_matrix,"percentVar")   #**in percent
+pca_rotation <- attr(pca_matrix,"rotation") #***markers x no_pc
+
+plot(var_percent)
+
+
+
+# UMAP
+n_components <- 10
+
+# parent UMAP directory
+umap_dir <- file.path(res_dir, "UMAP")
+if (!dir.exists(umap_dir)) dir.create(umap_dir, recursive = TRUE)
+
+# directory specifying PC used for UMAP
+umap_pc_dir <- file.path(umap_dir, paste0("PC_", n_components))
+if (!dir.exists(umap_pc_dir)) dir.create(umap_pc_dir, recursive = TRUE)
+
+# remove cells = 1e3
+sce_sub <- runDR(sce_sub, "UMAP", features = sel_markers, pca = n_components)
