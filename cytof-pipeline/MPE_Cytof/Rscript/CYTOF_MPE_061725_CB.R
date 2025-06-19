@@ -375,7 +375,7 @@ for (selPanel in list_panels){
 # ------------------------------------------------------------------------------
 # Outlier Detection
 # 
-# Note: output is the score from fsom
+# NOTE: output is the score from fsom
 #-------------------------------------------------------------------------------
 
 list_panels <- c("TBNK")
@@ -553,7 +553,7 @@ message("Ended: ", format(Sys.time(), tz = "America/Los_Angeles"))
 # ------------------------------------------------------------------------------
 # Normalization Using Reference Samples
 #
-# Note: 6/17/2025
+# NOTE: 6/17/2025
 #   - SKIPPED normalization due to some reference samples causing bugs during outlier step.
 #   - Affected Panels: TBNK, Cytokine
 #   - All Myeloid samples passed through outlier step ok.
@@ -647,7 +647,7 @@ CytoNorm::QuantileNorm.normalize(model = model,
 # ------------------------------------------------------------------------------
 # Change $FIL for normalized, gated files
 #
-# Note: 6/17/2025 
+# NOTE: 6/17/2025 
 #   - Changed $FIL for NON-normalized, gated files to keep workflow consistent
 #     while skipping normalization.
 #-------------------------------------------------------------------------------
@@ -671,7 +671,7 @@ change_fcs_FIL(fcs_files)
 # ------------------------------------------------------------------------------
 # Run FSOM & UMAP by CATALYST 
 # 
-# Note:
+# NOTE:
 #   - Using non-normalized, gated data
 #-------------------------------------------------------------------------------
 
@@ -711,7 +711,7 @@ analysis_dir <- file.path(workFolder, "CYTOF_data", "Analysis", selPanel)
 if (!dir.exists(analysis_dir)) dir.create(analysis_dir, recursive = TRUE)
 
 # set results directory
-res_dir <- file.path(analysis_dir, "Results")
+res_dir <- file.path(analysis_dir, "Results_Subset_Lineage")
 if (!dir.exists(res_dir)) dir.create(res_dir, recursive = TRUE)
 
 
@@ -821,24 +821,77 @@ dev.off()
 
 # ------------------------------------------------------------------------------
 
-
 # select marker subset to use
 
-# lineage markers
+# full lineage markers
 type_markers <- rownames(sce)[rowData(sce)$marker_class == "type"]
 
+
+
+
+# lineage SUBSET 
+# NOTE:
+#   - Using hard-coded vector & read in file to verify
+#   - These are from 'Symbol' column from metadata.
+#   - Get associated `antigen` marker_name from rowData() for subsetting sce object 
+lin_subset_symbols_vec <- c(
+  "CD27",
+  "CD4",
+  "KLRC2",
+  "KLRD1",
+  "KLRB1",
+  "FCGR3A",
+  "CD45RO",
+  "CD45RA",
+  "NCAM1",
+  "CD19",
+  "CD8A",
+  "KLRC1",
+  "CD3",
+  "KIR2DL3",
+  "CD45",
+  "ITGAM"
+)
+lin_subset_symbols <- readLines(file.path(res_dir, "lineage_subset_markers.txt"))
+
+# CHECK IF BOTH ARE EQUAL
+setequal(lin_subset_symbols_vec, lin_subset_symbols)
+
+# get antigen marker name for subsetting sce object
+rd <- as.data.frame(rowData(sce))
+lin_subset_markers <- rd$marker_name[rd$Symbol %in% lin_subset_symbols]
+
+# lin_subset_markers_og <- rd$marker_name[rowData(sce)$Symbol %in% lin_subset_symbols]
+# setequal(lin_subset_markers, lin_subset_markers_og)
+
+
+
+
 # select markers
-sel_markers <- type_markers
+sel_markers <- lin_subset_markers
 
 # partition sce object for selected markers
 sce_sub <- sce[sel_markers, ]
+# tmp <- sce[rowData(sce)$Symbol %in% lin_subset_symbols, ]
+
+# identical(sce_sub, tmp)
+# setequal(rownames(sce_sub), rownames(sce_lin_subset))
+
+# sce_sub_full_lin <- sce[type_markers, ]
+
+
+
+
 
 # set cluster info directory
 cluster_info_dir <- file.path(res_dir, "Cluster_Info")
 if (!dir.exists(cluster_info_dir)) dir.create(cluster_info_dir, recursive = TRUE)
 
 
-# FSOM
+
+
+
+# FSOM -------------------------------------------------------------------------
 maxk <- 20
 sce_sub <- cluster(sce_sub,
                    features = sel_markers,
@@ -846,7 +899,6 @@ sce_sub <- cluster(sce_sub,
                    ydim = 10,
                    maxK = maxk,
                    seed = 1234)
-
 
 # matrix showing relationship between SOM (n=100) and consensus cluster (metaX)
 tmp_cluster_codes <- cluster_codes(sce_sub)
@@ -868,7 +920,7 @@ write.table(raw_clust_expr_df, file.path(cluster_info_dir, file_name), sep = "\t
 
 
 
-# PCA
+# PCA --------------------------------------------------------------------------
 pc_prop <- 0.75 #*** proportion of total features to use
 no_pcs <- floor(nrow(sce_sub) * pc_prop)
 sce_sub <- runPCA(sce_sub, exprs_values = "exprs", ncomponents = floor(nrow(sce_sub) * pc_prop))
@@ -878,7 +930,7 @@ dim(reducedDim(sce_sub,"PCA"))   #ncells x no_pc
 
 
 # elbow plot
-pca_matrix <- reducedDim(sub_sce, "PCA")
+pca_matrix <- reducedDim(sce_sub, "PCA")
 
 # either for non-normalized (sum<1)
 var_explained <- attr(pca_matrix, "varExplained")  #***non-normalize to 1
@@ -892,28 +944,106 @@ file_name <- paste0("PCA_Elbow_Plot", ".png")
 ggsave(filename = file.path(res_dir, file_name), plot = elbow_PLOT, height = 8, width = 12)
 
 
-# UMAP
-n_components <- 10
+
+# UMAP -------------------------------------------------------------------------
+pc_to_use <- 10
 
 # parent UMAP directory
 umap_dir <- file.path(res_dir, "UMAP")
 if (!dir.exists(umap_dir)) dir.create(umap_dir, recursive = TRUE)
 
 # directory specifying PC used for UMAP
-umap_pc_dir <- file.path(umap_dir, paste0("PC_", n_components))
+umap_pc_dir <- file.path(umap_dir, paste0("PC_", pc_to_use))
 if (!dir.exists(umap_pc_dir)) dir.create(umap_pc_dir, recursive = TRUE)
 
-# remove cells = 1e3
-sce_sub <- runDR(sce_sub, "UMAP", features = sel_markers, pca = n_components)
+# remove cells = 1e3; use ~10% of avg_cells_per_sample
+#avg_cells_per_sample <- mean(table(colData(sce_sub)$sample_id))
+n_cells <- 2e4
+sce_sub <- runDR(sce_sub, "UMAP", cells = n_cells, features = sel_markers, pca = pc_to_use, seed = 1234)
+
+# specify cluster for plotting
+cluster_name <- "meta20"
+
+umap_PLOT <- plotDR(sce_sub, "UMAP", color_by = cluster_name)
+file_name <- paste0("UMAP_", cluster_name, ".png")
+ggsave(filename = file.path(umap_pc_dir, file_name), plot = umap_PLOT, width = 10, height = 10, bg = "white")
+
+umap_facet_PLOT <- plotDR(sce_sub, "UMAP", color_by = cluster_name, facet_by = cluster_name)
+file_name <- paste0("UMAP_", cluster_name, "_facet_by_cluster", ".png")
+ggsave(filename = file.path(umap_pc_dir, file_name), plot = umap_facet_PLOT, width = 12, height = 10, bg = "white")
 
 
 
+# Dotplot ----------------------------------------------------------------------
+dotplot_dir <- file.path(res_dir, "Dotplot")
+if (!dir.exists(dotplot_dir)) dir.create(dotplot_dir, recursive = TRUE)
+
+# no scaling
+dotplot_no_scaled_dir <- file.path(dotplot_dir, "No_Scaled")
+if (!dir.exists(dotplot_no_scaled_dir)) dir.create(dotplot_no_scaled_dir, recursive = TRUE)
+
+# scaling
+dotplot_scaled_dir <- file.path(dotplot_dir, "Scaled")
+if (!dir.exists(dotplot_scaled_dir)) dir.create(dotplot_scaled_dir, recursive = TRUE)
+
+# set output directory; i.e. scaling or no scaling
+dp_output_dir <- dotplot_scaled_dir
+
+cluster_name <- "meta20"
+scale <- TRUE
+fun <- "median"
+
+dot_PLOT <- dotplot_LT(sce_sub, cluster_name = cluster_name, assay = "exprs", fun = fun, scale = scale, output_dir = dp_output_dir)
+file_name <- paste0(cluster_name, "_dotplot_", fun, ".png")
+ggsave(filename = file.path(dp_output_dir, file_name), plot = dot_PLOT, width = 10, height = 8)
+
+################################################################################
+# TESTING dotplot_OG() VS dotplot_LT()
+
+test_dp_dir <- file.path(dp_output_dir, "TEST")
+if (!dir.exists(test_dp_dir)) dir.create(test_dp_dir, recursive = TRUE)
+
+dot_PLOT <- dotplot_OG(sce_sub, cluster_name = cluster_name, assay = "exprs", fun = fun, scale = scale, output_dir = test_dp_dir)
+file_name <- paste0(cluster_name, "_dotplot_", fun, ".png")
+ggsave(filename = file.path(test_dp_dir, file_name), plot = dot_PLOT, width = 10, height = 8)
+
+# NOTE:
+#   - got same results as dotplot_LT()
+################################################################################
 
 
 
-
-
-
+# FSOM on PCA ------------------------------------------------------------------
+# n_components <- 10
+# 
+# pca_data_selected <- pca_matrix[, 1:n_components]
+# 
+# fsom <- FlowSOM::FlowSOM(
+#   input = pca_data_selected,
+#   xdim = 10,
+#   ydim = 10,
+#   seed = 1234
+# )
+# 
+# # SOM100 cluster ids
+# som100_ids <- fsom$map$mapping[, 1]
+# 
+# # metaclustering
+# maxk <- 20
+# # shows SOM100 - metacluster pairs
+# meta_cluster_map <- metaClustering_consensus(fsom$map$codes, k = maxk)
+# # get metacluster id for each cell
+# meta_cluster_ids <- meta_cluster_map[som100_ids]
+# 
+# # add to sce column data
+# meta_cluster_name <- paste0("meta", maxk, "_processed")
+# colData(sce_sub)[[meta_cluster_name]] <- as.factor(meta_cluster_ids)
+# 
+# # get cell distribution across metaK & metaK_processed clusters
+# cell_dist_count <- table(sce_sub$meta20, sce_sub$meta20_processed)
+# cell_dist_prop <- prop.table(cell_dist_count, marign = 1)
+# 
+# file_name <- file.path(cluster_info_dir, "cell_distribution_count.txt")
 
 
 
