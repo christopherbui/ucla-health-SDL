@@ -714,7 +714,6 @@ if (!dir.exists(analysis_dir)) dir.create(analysis_dir, recursive = TRUE)
 res_dir <- file.path(analysis_dir, "Results_Subset_Lineage")
 if (!dir.exists(res_dir)) dir.create(res_dir, recursive = TRUE)
 
-
 # get fcs files
 fcs_files <- list.files(norm_dir,
                         pattern = ".fcs$",
@@ -746,6 +745,14 @@ colData(sce)$sample_id <- droplevels(colData(sce)$sample_id)
 # add "Symbol" marker names for plotting; preferred for publishing
 matched_symbols <- panel_info$Symbol[match(rownames(sce), panel_info$antigen)]
 rowData(sce)$Symbol <- matched_symbols
+
+
+# SAVE MAIN SCE OBJECT
+rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS"
+file_name <- "sce_main.rds"
+saveRDS(sce, file = file.path(rds_path, file_name))
+
+
 
 
 # GENERAL SCE OBJECT INFO
@@ -823,13 +830,18 @@ dev.off()
 
 # select marker subset to use
 
-# full lineage markers
+# FULL lineage markers
 type_markers <- rownames(sce)[rowData(sce)$marker_class == "type"]
 
+# GET MAIN SCE OBJECT, WITH FULL LINEAGE MARKERS
+sce_full_lin <- sce[type_markers, ]
+
+rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS"
+file_name <- "sce_full_lin.rds"
+saveRDS(sce_only_lin, file = file.path(rds_path, file_name))
 
 
-
-# lineage SUBSET 
+# SUBSET lineage markers
 # NOTE:
 #   - Using hard-coded vector & read in file to verify
 #   - These are from 'Symbol' column from metadata.
@@ -868,6 +880,7 @@ lin_subset_markers <- rd$marker_name[rd$Symbol %in% lin_subset_symbols]
 
 
 # select markers
+# sel_markers <- type_markers
 sel_markers <- lin_subset_markers
 
 # partition sce object for selected markers
@@ -880,7 +893,10 @@ sce_sub <- sce[sel_markers, ]
 # sce_sub_full_lin <- sce[type_markers, ]
 
 
-
+# SAVE SCE SUBSET
+rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS"
+file_name <- "sce_subset_lineage.rds"
+saveRDS(sce_sub, file = file.path(rds_path, file_name))
 
 
 # set cluster info directory
@@ -899,12 +915,35 @@ sce_sub <- cluster(sce_sub,
                    ydim = 10,
                    maxK = maxk,
                    seed = 1234)
+# saveRDS
+rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS"
+file_name <- "sce_subset_lineage_AFTER_FSOM.rds"
+saveRDS(sce_sub, file = file.path(rds_path, file_name))
+
+
+
+sce_full_lin <- cluster(sce_full_lin,
+                        features = type_markers,
+                        xdim = 10,
+                        ydim = 10,
+                        maxK = maxk,
+                        seed = 1234)
+# saveRDS
+rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS"
+file_name <- "sce_full_lineage_AFTER_FSOM.rds"
+saveRDS(sce_only_lin, file = file.path(rds_path, file_name))
+
+
+
 
 # matrix showing relationship between SOM (n=100) and consensus cluster (metaX)
 tmp_cluster_codes <- cluster_codes(sce_sub)
 
 # add meta clusters to column data
 sce_sub$meta20 <- cluster_ids(sce_sub, "meta20")
+
+sce_full_lin$meta20 <- cluster_ids(sce_full_lin, "meta20")
+
 
 # export expression of cluster data
 sel_metaK <- c("meta20")   # consensus cluster level or SOM
@@ -923,7 +962,10 @@ write.table(raw_clust_expr_df, file.path(cluster_info_dir, file_name), sep = "\t
 # PCA --------------------------------------------------------------------------
 pc_prop <- 0.75 #*** proportion of total features to use
 no_pcs <- floor(nrow(sce_sub) * pc_prop)
+
 sce_sub <- runPCA(sce_sub, exprs_values = "exprs", ncomponents = floor(nrow(sce_sub) * pc_prop))
+sce_full_lin <- runPCA(sce_full_lin, exprs_values = "exprs", ncomponents = floor(nrow(sce_full_lin) * pc_prop))
+
 
 reducedDimNames(sce_sub)  #"PCA"
 dim(reducedDim(sce_sub,"PCA"))   #ncells x no_pc
