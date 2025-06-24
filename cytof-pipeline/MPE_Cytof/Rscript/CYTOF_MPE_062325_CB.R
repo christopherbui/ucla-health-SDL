@@ -56,8 +56,8 @@ allSampleInfo <- allSampleInfo[, -1]
 #-------------------------------------------------------------------------------
 
 
-selPanel <- c("TBNK")  #*******
-# selPanel <- c("Myeloid")  #*******
+# selPanel <- c("TBNK")  #*******
+selPanel <- c("Myeloid")  #*******
 # selPanel <- c("Cytokines")  #*******
 
 
@@ -681,9 +681,9 @@ allSampleInfo <- read.delim(fin_info, sep = "\t", header = TRUE, stringsAsFactor
 allSampleInfo <- allSampleInfo[, -1]
 
 # select panel
-selPanel <- c("TBNK")
+# selPanel <- c("TBNK")
 # selPanel <- c("Myeloid")
-# selPanel <- c("Cytokines")
+selPanel <- c("Cytokines")
 
 # get panel info
 fin_panel <- paste(selPanel, "_markers_022625.txt", sep="")
@@ -748,11 +748,9 @@ rowData(sce)$Symbol <- matched_symbols
 
 
 # SAVE MAIN SCE OBJECT
-rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS"
-file_name <- "sce_main.rds"
-saveRDS(sce, file = file.path(rds_path, file_name))
-
-
+# rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS"
+# file_name <- "sce_main.rds"
+# saveRDS(sce, file = file.path(rds_path, file_name))
 
 
 # GENERAL SCE OBJECT INFO
@@ -828,75 +826,30 @@ dev.off()
 
 # ------------------------------------------------------------------------------
 
-# select marker subset to use
+# Select Markers To Use
 
 # FULL lineage markers
 type_markers <- rownames(sce)[rowData(sce)$marker_class == "type"]
 
-# GET MAIN SCE OBJECT, WITH FULL LINEAGE MARKERS
-sce_full_lin <- sce[type_markers, ]
-
-rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS"
-file_name <- "sce_full_lin.rds"
-saveRDS(sce_only_lin, file = file.path(rds_path, file_name))
-
-
 # SUBSET lineage markers
 # NOTE:
-#   - Using hard-coded vector & read in file to verify
-#   - These are from 'Symbol' column from metadata.
 #   - Get associated `antigen` marker_name from rowData() for subsetting sce object 
-lin_subset_symbols_vec <- c(
-  "CD27",
-  "CD4",
-  "KLRC2",
-  "KLRD1",
-  "KLRB1",
-  "FCGR3A",
-  "CD45RO",
-  "CD45RA",
-  "NCAM1",
-  "CD19",
-  "CD8A",
-  "KLRC1",
-  "CD3",
-  "KIR2DL3",
-  "CD45",
-  "ITGAM"
-)
-lin_subset_symbols <- readLines(file.path(res_dir, "lineage_subset_markers.txt"))
-
-# CHECK IF BOTH ARE EQUAL
-setequal(lin_subset_symbols_vec, lin_subset_symbols)
-
-# get antigen marker name for subsetting sce object
-rd <- as.data.frame(rowData(sce))
-lin_subset_markers <- rd$marker_name[rd$Symbol %in% lin_subset_symbols]
-
-# lin_subset_markers_og <- rd$marker_name[rowData(sce)$Symbol %in% lin_subset_symbols]
-# setequal(lin_subset_markers, lin_subset_markers_og)
-
-
-
+lin_subset_markers <- readLines(file.path(analysis_dir, "lineage_subset_markers_antigen.txt"))
 
 # select markers
+
 # sel_markers <- type_markers
 sel_markers <- lin_subset_markers
 
 # partition sce object for selected markers
+# sce_full <- sce[sel_markers, ]
 sce_sub <- sce[sel_markers, ]
-# tmp <- sce[rowData(sce)$Symbol %in% lin_subset_symbols, ]
-
-# identical(sce_sub, tmp)
-# setequal(rownames(sce_sub), rownames(sce_lin_subset))
-
-# sce_sub_full_lin <- sce[type_markers, ]
 
 
 # SAVE SCE SUBSET
-rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS"
-file_name <- "sce_subset_lineage.rds"
-saveRDS(sce_sub, file = file.path(rds_path, file_name))
+# rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS"
+# file_name <- "sce_subset_lineage.rds"
+# saveRDS(sce_sub, file = file.path(rds_path, file_name))
 
 
 # set cluster info directory
@@ -905,74 +858,63 @@ if (!dir.exists(cluster_info_dir)) dir.create(cluster_info_dir, recursive = TRUE
 
 
 
-
-
 # FSOM -------------------------------------------------------------------------
 maxk <- 20
-sce_sub <- cluster(sce_sub,
+
+# sce_tmp <- sce_full
+sce_tmp <- sce_sub
+
+sce_tmp <- cluster(sce_tmp,
                    features = sel_markers,
                    xdim = 10,
                    ydim = 10,
                    maxK = maxk,
                    seed = 1234)
 # saveRDS
-rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS"
-file_name <- "sce_subset_lineage_AFTER_FSOM.rds"
-saveRDS(sce_sub, file = file.path(rds_path, file_name))
-
-
-
-sce_full_lin <- cluster(sce_full_lin,
-                        features = type_markers,
-                        xdim = 10,
-                        ydim = 10,
-                        maxK = maxk,
-                        seed = 1234)
-# saveRDS
-rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS"
-file_name <- "sce_full_lineage_AFTER_FSOM.rds"
-saveRDS(sce_only_lin, file = file.path(rds_path, file_name))
+# rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS"
+# file_name <- "sce_subset_lineage_AFTER_FSOM.rds"
+# saveRDS(sce_sub, file = file.path(rds_path, file_name))
 
 
 
 
 # matrix showing relationship between SOM (n=100) and consensus cluster (metaX)
-tmp_cluster_codes <- cluster_codes(sce_sub)
+tmp_cluster_codes <- cluster_codes(sce_tmp)
 
 # add meta clusters to column data
-sce_sub$meta20 <- cluster_ids(sce_sub, "meta20")
+sce_tmp$meta20 <- cluster_ids(sce_tmp, "meta20")
 
-sce_full_lin$meta20 <- cluster_ids(sce_full_lin, "meta20")
+# sce_full_lin$meta20 <- cluster_ids(sce_full_lin, "meta20")
 
 
 # export expression of cluster data
-sel_metaK <- c("meta20")   # consensus cluster level or SOM
-sel_aggregate <- c("median")
-
-raw_clust_expr <- CATALYST:::.agg(sce_sub, by = sel_metaK, assay = "exprs", fun = sel_aggregate)
-raw_clust_expr_df <- as.data.frame(raw_clust_expr)
-raw_clust_expr_df <- tibble::rownames_to_column(raw_clust_expr_df, "marker")
-
-file_name <- paste0(sel_metaK, "_", sel_aggregate , "_expr_matrix", ".txt")
-write.table(raw_clust_expr_df, file.path(cluster_info_dir, file_name), sep = "\t", quote = FALSE, row.names=FALSE)
+# sel_metaK <- c("meta20")   # consensus cluster level or SOM
+# sel_aggregate <- c("median")
+# 
+# raw_clust_expr <- CATALYST:::.agg(sce_sub, by = sel_metaK, assay = "exprs", fun = sel_aggregate)
+# raw_clust_expr_df <- as.data.frame(raw_clust_expr)
+# raw_clust_expr_df <- tibble::rownames_to_column(raw_clust_expr_df, "marker")
+# 
+# file_name <- paste0(sel_metaK, "_", sel_aggregate , "_expr_matrix", ".txt")
+# write.table(raw_clust_expr_df, file.path(cluster_info_dir, file_name), sep = "\t", quote = FALSE, row.names=FALSE)
 
 
 
 
 # PCA --------------------------------------------------------------------------
 pc_prop <- 0.75 #*** proportion of total features to use
-no_pcs <- floor(nrow(sce_sub) * pc_prop)
+no_pcs <- floor(nrow(sce_tmp) * pc_prop)
 
-sce_sub <- runPCA(sce_sub, exprs_values = "exprs", ncomponents = floor(nrow(sce_sub) * pc_prop))
-sce_full_lin <- runPCA(sce_full_lin, exprs_values = "exprs", ncomponents = floor(nrow(sce_full_lin) * pc_prop))
+sce_tmp <- runPCA(sce_tmp, exprs_values = "exprs", ncomponents = floor(nrow(sce_tmp) * pc_prop))
+# sce_full_lin <- runPCA(sce_full_lin, exprs_values = "exprs", ncomponents = floor(nrow(sce_full_lin) * pc_prop))
 
 
-reducedDimNames(sce_sub)  #"PCA"
-dim(reducedDim(sce_sub,"PCA"))   #ncells x no_pc
+reducedDimNames(sce_tmp)  #"PCA"
+dim(reducedDim(sce_tmp,"PCA"))   #ncells x no_pc
 
 
 # elbow plot
-pca_matrix <- reducedDim(sce_sub, "PCA")
+pca_matrix <- reducedDim(sce_tmp, "PCA")
 
 # either for non-normalized (sum<1)
 var_explained <- attr(pca_matrix, "varExplained")  #***non-normalize to 1
@@ -1000,11 +942,11 @@ if (!dir.exists(umap_pc_dir)) dir.create(umap_pc_dir, recursive = TRUE)
 
 # remove cells = 1e3; use ~10% of avg_cells_per_sample
 #avg_cells_per_sample <- mean(table(colData(sce_sub)$sample_id))
-n_cells <- 2e4
-sce_sub <- runDR(sce_sub, "UMAP", cells = n_cells, features = sel_markers, pca = pc_to_use, seed = 1234)
+n_cells <- 1e3
+sce_tmp <- runDR(sce_tmp, "UMAP", cells = n_cells, features = sel_markers, pca = pc_to_use, seed = 1234)
 
 # specify cluster for plotting
-cluster_name <- "meta20"
+sel_metaK <- c("meta20")
 
 umap_PLOT <- plotDR(sce_sub, "UMAP", color_by = cluster_name)
 file_name <- paste0("UMAP_", cluster_name, ".png")
@@ -1021,71 +963,47 @@ dotplot_dir <- file.path(res_dir, "Dotplot")
 if (!dir.exists(dotplot_dir)) dir.create(dotplot_dir, recursive = TRUE)
 
 # no scaling
-dotplot_no_scaled_dir <- file.path(dotplot_dir, "No_Scaled")
+dotplot_no_scaled_dir <- file.path(dotplot_dir, "Non_Scaled")
 if (!dir.exists(dotplot_no_scaled_dir)) dir.create(dotplot_no_scaled_dir, recursive = TRUE)
 
 # scaling
 dotplot_scaled_dir <- file.path(dotplot_dir, "Scaled")
 if (!dir.exists(dotplot_scaled_dir)) dir.create(dotplot_scaled_dir, recursive = TRUE)
 
+
+sel_metaK <- c("meta20")
+sel_aggregate <- c("median")
+scale_option <- TRUE
+label_for_dotplot <- paste(ifelse(scale_option, "scaled", "non-scaled"), sel_aggregate, "exprs", sep = " ")
+
+
 # set output directory; i.e. scaling or no scaling
-dp_output_dir <- dotplot_scaled_dir
-
-cluster_name <- "meta20"
-scale <- TRUE
-fun <- "median"
-
-dot_PLOT <- dotplot_LT(sce_sub, cluster_name = cluster_name, assay = "exprs", fun = fun, scale = scale, output_dir = dp_output_dir)
-file_name <- paste0(cluster_name, "_dotplot_", fun, ".png")
-ggsave(filename = file.path(dp_output_dir, file_name), plot = dot_PLOT, width = 10, height = 8)
-
-################################################################################
-# TESTING dotplot_OG() VS dotplot_LT()
-
-test_dp_dir <- file.path(dp_output_dir, "TEST")
-if (!dir.exists(test_dp_dir)) dir.create(test_dp_dir, recursive = TRUE)
-
-dot_PLOT <- dotplot_OG(sce_sub, cluster_name = cluster_name, assay = "exprs", fun = fun, scale = scale, output_dir = test_dp_dir)
-file_name <- paste0(cluster_name, "_dotplot_", fun, ".png")
-ggsave(filename = file.path(test_dp_dir, file_name), plot = dot_PLOT, width = 10, height = 8)
-
-# NOTE:
-#   - got same results as dotplot_LT()
-################################################################################
+dp_output_dir <- ifelse(scale_option, dotplot_scaled_dir, dotplot_no_scaled_dir)
 
 
+tmp_ftab <- dotplotTables(sce_tmp,
+                          cluster_name = sel_metaK,
+                          assay = "exprs",
+                          fun = sel_aggregate,
+                          scale = scale_option,
+                          q = 0.01)
 
-# FSOM on PCA ------------------------------------------------------------------
-# n_components <- 10
-# 
-# pca_data_selected <- pca_matrix[, 1:n_components]
-# 
-# fsom <- FlowSOM::FlowSOM(
-#   input = pca_data_selected,
-#   xdim = 10,
-#   ydim = 10,
-#   seed = 1234
-# )
-# 
-# # SOM100 cluster ids
-# som100_ids <- fsom$map$mapping[, 1]
-# 
-# # metaclustering
-# maxk <- 20
-# # shows SOM100 - metacluster pairs
-# meta_cluster_map <- metaClustering_consensus(fsom$map$codes, k = maxk)
-# # get metacluster id for each cell
-# meta_cluster_ids <- meta_cluster_map[som100_ids]
-# 
-# # add to sce column data
-# meta_cluster_name <- paste0("meta", maxk, "_processed")
-# colData(sce_sub)[[meta_cluster_name]] <- as.factor(meta_cluster_ids)
-# 
-# # get cell distribution across metaK & metaK_processed clusters
-# cell_dist_count <- table(sce_sub$meta20, sce_sub$meta20_processed)
-# cell_dist_prop <- prop.table(cell_dist_count, marign = 1)
-# 
-# file_name <- file.path(cluster_info_dir, "cell_distribution_count.txt")
+tmp_fig <- dotplotFig(tmp_ftab$expr_long, lab = label_for_dotplot)
+
+
+# save dotplot matrices
+prefix <- paste0(sel_metaK, "_dotplot_", sel_aggregate, ifelse(scale_option, "_SCALED", "_NON_SCALED"))
+write.table(tmp_ftab$expr_wide, file = file.path(dp_output_dir, paste0(prefix, "_wide.txt")),
+            sep = "\t", quote = FALSE, col.names = NA)
+write.table(tmp_ftab$expr_long, file = file.path(dp_output_dir, paste0(prefix, "_long.txt")),
+            sep = "\t", quote = FALSE, col.names = NA)
+  
+
+# save dotplot figure
+prefix <- paste0(sel_metaK, "_dotplot_", sel_aggregate, ifelse(scale_option, "_SCALED", "_NON_SCALED"))
+ggsave(filename = file.path(dp_output_dir, paste0(prefix, ".png")), plot = tmp_fig, width = 10, height = 8)
+
+
 
 
 
