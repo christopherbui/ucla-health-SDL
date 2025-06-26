@@ -681,9 +681,9 @@ allSampleInfo <- read.delim(fin_info, sep = "\t", header = TRUE, stringsAsFactor
 allSampleInfo <- allSampleInfo[, -1]
 
 # select panel
-# selPanel <- c("TBNK")
+selPanel <- c("TBNK")
 # selPanel <- c("Myeloid")
-selPanel <- c("Cytokines")
+# selPanel <- c("Cytokines")
 
 # get panel info
 fin_panel <- paste(selPanel, "_markers_022625.txt", sep="")
@@ -711,7 +711,7 @@ analysis_dir <- file.path(workFolder, "CYTOF_data", "Analysis", selPanel)
 if (!dir.exists(analysis_dir)) dir.create(analysis_dir, recursive = TRUE)
 
 # set results directory
-res_dir <- file.path(analysis_dir, "Results_Subset_Lineage")
+res_dir <- file.path(analysis_dir, "Results_Full_Lineage")
 if (!dir.exists(res_dir)) dir.create(res_dir, recursive = TRUE)
 
 # get fcs files
@@ -1065,13 +1065,33 @@ ggsave(filename = file.path(res_dir, "Silhouette_Plot.png"), plot = sil_PLOT, wi
 rds_path <- file.path(analysis_dir, "RDS")
 
 # load sce object
-rds_to_use <- "sce_full_lineage.rds"
-# rds_to_use <- "sce_subset_lineage.rds"
+# rds_to_use <- "sce_main.rds"
+rds_to_use <- "sce_subset_lineage.rds"
 
 sce_tmp <- readRDS(file.path(rds_path, rds_to_use))
 
+sce_full_lineage <- readRDS(file.path(rds_path, "sce_full_lineage.rds"))
+sce_sub_lineage <- readRDS(file.path(rds_path, "sce_subset_lineage.rds"))
+
 # add meta6 to colData
-sce_tmp$meta6 <- cluster_ids(sce_tmp, "meta6")
+# sce_tmp$meta6 <- cluster_ids(sce_tmp, "meta6")  # works if sce_tmp has metadata from clustering
+
+# add cluster ids from sce_full_lineage to sce_main
+cluster_name <- c("meta6")  # check silhouette plot & confirm cluster for each panel
+
+colData(sce_full_lineage)[[cluster_name]] <- cluster_ids(sce_full_lineage, cluster_name)
+
+sce_tmp$cluster_id <- sce_full_lineage$cluster_id
+colData(sce_tmp)[[cluster_name]] <- colData(sce_full_lineage)[[cluster_name]]
+
+# copy metadata; need for diffcyt
+metadata(sce_tmp)$cluster_codes <- metadata(sce_full_lineage)$cluster_codes
+
+
+sce_tmp_0 <- sce_tmp
+# IMPORTANT:
+# - Filter out Ref PBMC samples
+sce_tmp <- filterSCE(sce_tmp, patient_id != "Ref")
 
 # NOTE:
 # - By default, MPE is the reference; Relevel the tissue type
@@ -1080,12 +1100,18 @@ old_level <- levels(colData(sce_tmp)$tissue_type)
 colData(sce_tmp)$tissue_type <- factor(colData(sce_tmp)$tissue_type, levels = c("PBMC", "MPE"))
 new_level <- levels(colData(sce_tmp)$tissue_type)
 
-design <- createDesignMatrix(ei(sce_tmp), cols_design = "tissue_type")
+
+# diffcyt ----------------------------------------------------------------------
+
+condition <- "tissue_type"
+design <- createDesignMatrix(ei(sce_tmp), cols_design = condition)
 contrast <- createContrast(c(0, 1))
 
+
 # differential abundance (DA) of clusters
+cluster_name <- c("meta5")
 res_DA <- diffcyt(sce_tmp,
-                  clustering_to_use = "meta6",
+                  clustering_to_use = cluster_name,
                   analysis_type = "DA",
                   method_DA = "diffcyt-DA-edgeR",
                   design = design,
@@ -1096,42 +1122,152 @@ res_DA <- diffcyt(sce_tmp,
 # "DS" expects functional markers by default; need to specify lineage markers
 type_markers <- rowData(sce_tmp)$marker_class == "type"
 
+sel_markers <- rownames(sce_tmp) %in% rownames(sce_tmp) # all markers
+# sel_markers <- type_markers
+
+
+cluster_name <- c("meta5")
 res_DS <- diffcyt(sce_tmp,
-                  clustering_to_use = "meta6",
+                  clustering_to_use = cluster_name,
                   analysis_type = "DS",
                   method_DS = "diffcyt-DS-limma",
                   design = design,
                   contrast = contrast,
-                  markers_to_test = type_markers,
+                  markers_to_test = sel_markers,
                   verbose = FALSE)
 
 
-
-counts_mat <- assay(res_DA$d_counts, "counts")
-cluster2_counts <- counts_mat["2", ]  # cluster 2 is row "2"
-
-sum(cluster2_counts >= 3)  # how many samples meet min_cells
-
-
-
-
-rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS_COMP/Cytokine"
+rds_path <- paste0("C:/Users/cdbui/Desktop/SCE_RDS_COMP/", selPanel)
 
 # save RDS
-saveRDS(res_DA, file = file.path(rds_path, "res_DA.rds"))
-saveRDS(res_DS, file = file.path(rds_path, "res_DS.rds"))
+file_name <- paste0("res_DA_", cluster_name, "_", condition, ".rds")
+saveRDS(res_DA, file = file.path(rds_path, file_name))
+
+file_name <- paste0("res_DS_", cluster_name, "_", condition, ".rds")
+saveRDS(res_DS, file = file.path(rds_path, file_name))
 
 
 
-rowData(res_DA$d_counts)
-colData(res_DA$d_counts)
+# scran - group: clusters ------------------------------------------------------
+cluster_name <- c("meta5")
+tmp_de_pv <- scran::findMarkers(sce_tmp,
+                                groups=cluster_ids(sce_tmp, cluster_name),
+                                assay.type = "exprs",
+                                test.type = "wilcox",
+                                pval.type = "all",   ##c("any", "some", "all"),
+                                min.prop = 0.25,   #default
+                                direction="up")
+tmp_de_all <- bind_rows(
+  lapply(names(tmp_de_pv), function(clust) {
+    df <- as.data.frame(tmp_de_pv[[clust]])
+    df$marker <- rownames(tmp_de_pv[[clust]])
+    df$cluster_id <- clust
+    df
+  })
+)
+tmp_de_all <- tmp_de_all %>%
+  relocate(marker, .before = everything()) %>%
+  relocate(cluster_id, .after = marker) %>%
+  relocate(AUC.1, .before = AUC.2)
 
-rowData(res_DA$res)
-colData(res_DA$res)
+rownames(tmp_de_all) <- NULL
 
-#----------------------
-rowData(res_DS$res)
-colData(res_DS$res)
+
+
+sum_out <- scran::summaryMarkerStats(sce_tmp,
+                                     groups = cluster_ids(sce_tmp, cluster_name),
+                                     assay.type = "exprs",
+                                     average = "median")
+
+sum_out_all <- bind_rows(
+  lapply(names(sum_out), function(clust) {
+    df <- as.data.frame(sum_out[[clust]])
+    df$marker <- rownames(sum_out[[clust]])
+    df$cluster_id <- clust
+    df
+  })
+)
+sum_out_all <- sum_out_all %>%
+  relocate(marker, .before = everything()) %>%
+  relocate(cluster_id, .after = marker)
+
+rownames(sum_out_all) <- NULL
+
+# write tables
+diff_expr_dir <- file.path(analysis_dir, "Diff_Expr")
+if (!dir.exists(diff_expr_dir)) dir.create(diff_expr_dir, recursive = TRUE)
+
+con <- c("Cluster")
+diff_expr_condition_dir <- file.path(diff_expr_dir, con)
+if (!dir.exists(diff_expr_condition_dir)) dir.create(diff_expr_condition_dir)
+
+file_name <- paste0("scran_de_", cluster_name, "_all_markers.txt")
+write.table(tmp_de_all, file = file.path(diff_expr_condition_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
+
+file_name <- paste0("scran_marker_sum_", cluster_name, "_all_markers.txt")
+write.table(sum_out_all, file = file.path(diff_expr_condition_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
+
+
+
+
+# scran - group: tissue type ---------------------------------------------------
+tmp_de_pv <- scran::findMarkers(sce_tmp,
+                                groups=colData(sce_tmp)$tissue_type,
+                                assay.type = "exprs",
+                                test.type = "wilcox",
+                                pval.type = "all",   ##c("any", "some", "all"),
+                                min.prop = 0.25,   #default
+                                direction="up")
+tmp_de_all <- bind_rows(
+  lapply(names(tmp_de_pv), function(tissue_type) {
+    df <- as.data.frame(tmp_de_pv[[tissue_type]])
+    df$marker <- rownames(tmp_de_pv[[tissue_type]])
+    df$tissue_type <- tissue_type
+    df
+  })
+)
+tmp_de_all <- tmp_de_all %>%
+  relocate(marker, .before = everything()) %>%
+  relocate(tissue_type, .after = marker) %>%
+  relocate(AUC.PBMC, .before = AUC.MPE)
+
+rownames(tmp_de_all) <- NULL
+
+
+
+
+sum_out <- scran::summaryMarkerStats(sce_tmp,
+                                     groups = colData(sce_tmp)$tissue_type,
+                                     assay.type = "exprs",
+                                     average = "median")
+sum_out_all <- bind_rows(
+  lapply(names(sum_out), function(tissue_type) {
+    df <- as.data.frame(sum_out[[tissue_type]])
+    df$marker <- rownames(sum_out[[tissue_type]])
+    df$tissue_type <- tissue_type
+    df
+  })
+)
+sum_out_all <- sum_out_all %>%
+  relocate(marker, .before = everything()) %>%
+  relocate(tissue_type, .after = marker)
+
+rownames(sum_out_all) <- NULL
+
+
+# write tables
+diff_expr_dir <- file.path(analysis_dir, "Diff_Expr")
+if (!dir.exists(diff_expr_dir)) dir.create(diff_expr_dir, recursive = TRUE)
+
+con <- c("Tissue_Type")
+diff_expr_condition_dir <- file.path(diff_expr_dir, con)
+if (!dir.exists(diff_expr_condition_dir)) dir.create(diff_expr_condition_dir)
+
+file_name <- paste0("scran_de_", "tissue", "_all_markers.txt")
+write.table(tmp_de_all, file = file.path(diff_expr_condition_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
+
+file_name <- paste0("scran_marker_sum_", "tissue", "_all_markers.txt")
+write.table(sum_out_all, file = file.path(diff_expr_condition_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
 
 
@@ -1142,20 +1278,159 @@ colData(res_DS$res)
 
 # boxplots of cluster abundance by batch/tissue_type ---------------------------
 
-sel_metaK <- c("meta6")
+cluster_name <- c("meta5")
 
 # boxplot of cluster abundance within sample, subplot by batch, facet by cluster
-abun1_PLOT <- CATALYST::plotAbundances(sce_tmp, k = sel_metaK, by = "cluster_id", group_by = "BATCH") +
+abun1_PLOT <- CATALYST::plotAbundances(sce_tmp, k = cluster_name, by = "cluster_id", group_by = "BATCH") +
   ggtitle("Abundance by Cluster & Batch")
-ggsave(file.path(res_dir, "abun_cluster_batch_boxplot.png"), plot = abun1_PLOT, width = 10, height = 6, dpi = 300)
+ggsave(file.path(analysis_dir, "abun_cluster_batch_boxplot.png"), plot = abun1_PLOT, width = 10, height = 6, dpi = 300)
 
 # boxplot of tissue type abundance within sample, subplot by tissue type, facet by cluster
-abun2_PLOT <- CATALYST::plotAbundances(sce_tmp, k = sel_metaK, by = "cluster_id", group_by = "tissue_type") +
+abun2_PLOT <- CATALYST::plotAbundances(sce_tmp, k = cluster_name, by = "cluster_id", group_by = "tissue_type") +
   ggtitle("Abundance by Cluster & Tissue Type")
-ggsave(file.path(res_dir, "abun_cluster_tissue_type_boxplot.png"), plot = abun2_PLOT, width = 10, height = 6, dpi = 300)
+ggsave(file.path(analysis_dir, "abun_cluster_tissue_type_boxplot.png"), plot = abun2_PLOT, width = 10, height = 6, dpi = 300)
 
 # barplot with x = each patient, subplot by BATCH
-CATALYST::plotAbundances(sce_tmp, k = sel_metaK, by = "sample_id", group_by = "BATCH")
+CATALYST::plotAbundances(sce_tmp, k = cluster_name, by = "sample_id", group_by = "BATCH")
 
 
+
+# use PBMC to check batch effect ------------------------
+cluster_name <- c("meta6")
+
+sce_all_pbmc <- filterSCE(sce_tmp_0, tissue_type == "PBMC")
+
+clust_tbl_pbmc <- table(cluster_ids(sce_all_pbmc, cluster_name), colData(sce_all_pbmc)$sample_id)
+clust_prop_tbl_pbmc <- prop.table(clust_tbl_pbmc, 2)
+png(file.path(analysis_dir, "pbmc_sample_cluster_heatmap.png"), width = 1200, height = 1000)
+pheatmap(clust_prop_tbl_pbmc, cluster_rows = FALSE, cluster_cols = TRUE, main = "PBMC Samples Cluster Proportions")
+dev.off()
+
+
+
+
+#  --------------------- determine which cluster to use ------------------------
+clust5 <- cluster_ids(sce_tmp_0, "meta5")
+clust6 <- cluster_ids(sce_tmp_0, "meta6")
+clust8 <- cluster_ids(sce_tmp_0, "meta8")
+clust11 <- cluster_ids(sce_tmp_0, "meta11")
+
+sce_tmp_0$meta5 <- cluster_ids(sce_tmp_0, "meta5")
+sce_tmp_0$meta8 <- cluster_ids(sce_tmp_0, "meta8")
+sce_tmp_0$meta11 <- cluster_ids(sce_tmp_0, "meta11")
+
+c5_dp <- dotplotTables(sce_tmp_0,
+                       "meta5",
+                       assay = "exprs",
+                       fun = "median",
+                       scale = TRUE,
+                       q = 0.01)
+
+c6_dp <- dotplotTables(sce_tmp_0,
+                       "meta6",
+                       assay = "exprs",
+                       fun = "median",
+                       scale = TRUE,
+                       q = 0.01)
+
+c8_dp <- dotplotTables(sce_tmp_0,
+                       "meta8",
+                       assay = "exprs",
+                       fun = "median",
+                       scale = TRUE,
+                       q = 0.01)
+
+c10_dp <- dotplotTables(sce_tmp_0,
+                       "meta10",
+                       assay = "exprs",
+                       fun = "median",
+                       scale = TRUE,
+                       q = 0.01)
+
+c11_dp <- dotplotTables(sce_tmp_0,
+                        "meta11",
+                        assay = "exprs",
+                        fun = "median",
+                        scale = TRUE,
+                        q = 0.01)
+
+
+# intra cluster corr
+corr_mat_c5 <- cor(c5_dp$expr_wide)
+pheatmap(corr_mat_c5,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         main = "Correlation between meta5 clusters",
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+corr_mat_c6 <- cor(c6_dp$expr_wide)
+pheatmap(corr_mat_c6,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         main = "Correlation between meta6 clusters",
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+corr_mat_c8 <- cor(c8_dp$expr_wide)
+pheatmap(corr_mat_c8,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         main = "Correlation between meta8 clusters",
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+corr_mat_c10 <- cor(c10_dp$expr_wide)
+pheatmap(corr_mat_c10,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         main = "Correlation between meta10 clusters",
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+corr_mat_c11 <- cor(c11_dp$expr_wide)
+pheatmap(corr_mat_c11,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         main = "Correlation between meta10 clusters",
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+
+
+
+
+
+
+corr_mat <- cor(c5_dp$expr_wide, c8_dp$expr_wide)
+pheatmap(corr_mat,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         main = "Correlation between meta5 and meta8 clusters",
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+corr_mat <- cor(c6_dp$expr_wide, c8_dp$expr_wide)
+pheatmap(corr_mat,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         main = "Correlation between meta6 and meta8 clusters",
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+corr_mat <- cor(c6_dp$expr_wide, c10_dp$expr_wide)
+pheatmap(corr_mat,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         main = "Correlation between meta6 and meta10 clusters",
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+corr_mat <- cor(c6_dp$expr_wide, c11_dp$expr_wide)
+pheatmap(corr_mat,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         main = "Correlation between meta6 and meta10 clusters",
+         fontsize_row = 10,
+         fontsize_col = 10)
 
