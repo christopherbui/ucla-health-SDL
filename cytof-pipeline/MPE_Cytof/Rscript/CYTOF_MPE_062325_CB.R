@@ -57,8 +57,8 @@ allSampleInfo <- allSampleInfo[, -1]
 
 
 # selPanel <- c("TBNK")  #*******
-selPanel <- c("Myeloid")  #*******
-# selPanel <- c("Cytokines")  #*******
+# selPanel <- c("Myeloid")  #*******
+selPanel <- c("Cytokines")  #*******
 
 
 # set output directories
