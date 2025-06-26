@@ -104,7 +104,22 @@ plot_elbow_plot <- function(var_percent) {
 
 
 
-
+approx_silhouette <- function(sce, low_id = 5, hi_id = 20) {
+  # list of cluster nodes
+  metaK_id <- colnames(sce@metadata$cluster_codes)[low_id:hi_id]
+  
+  # list of metacluster id for each cell within each cluster code
+  tmp_meta_clust <- lapply(as.list(metaK_id), function(id) CATALYST::cluster_ids(sce, id))
+  names(tmp_meta_clust) <- metaK_id
+  
+  # get expresssion matrix; transpose to have cells as rows, markers as columns for bluster
+  mat_expr <- t(as.matrix(assay(sce), "exprs"))
+  
+  # calculate average silhouette score for each cluster code
+  sel_expr <- vapply(tmp_meta_clust, function(x) mean(bluster::approxSilhouette(mat_expr, x)$width), 0)
+  
+  nclusters <- as.numeric(sapply(metaK_id, function(x) substr(x, 5, n)))
+}
 
 
 

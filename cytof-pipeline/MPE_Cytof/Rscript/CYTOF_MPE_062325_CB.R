@@ -942,7 +942,7 @@ if (!dir.exists(umap_pc_dir)) dir.create(umap_pc_dir, recursive = TRUE)
 
 # remove cells = 1e3; use ~10% of avg_cells_per_sample
 #avg_cells_per_sample <- mean(table(colData(sce_sub)$sample_id))
-n_cells <- 1e3
+n_cells <- 2e4
 sce_tmp <- runDR(sce_tmp, "UMAP", cells = n_cells, features = sel_markers, pca = pc_to_use, seed = 1234)
 
 # specify cluster for plotting
@@ -1005,7 +1005,157 @@ ggsave(filename = file.path(dp_output_dir, paste0(prefix, ".png")), plot = tmp_f
 
 
 
+# bluster silouette ------------------------------------------------------------
 
+# directory of RDS files
+rds_path <- file.path(analysis_dir, "RDS")
+
+# load sce object
+sce_tmp <- readRDS(file.path(rds_path, "sce_subset_lineage.rds"))
+
+
+# list of cluster codes
+metaK_id  <- colnames(sce_tmp@metadata$cluster_codes)[5:20]
+
+# metacluster id for each cell
+tmp_meta_clust <- lapply(as.list(metaK_id), function(id) CATALYST::cluster_ids(sce_tmp, id))
+
+names(tmp_meta_clust) <- metaK_id
+
+mat_expr <- t(as.matrix(assay(sce_tmp,  "exprs")))   #***DO NOT USE assay="exprs" since it gets raw data
+
+sil_expr <- vapply(tmp_meta_clust, function(x) mean(bluster::approxSilhouette(mat_expr, x)$width), 0)
+
+nclusters <- as.numeric(sapply(metaK_id, function(x) substr(x, 5, nchar(x))))
+
+plot(nclusters, sil_expr, xlab="Number of clusters", ylab="Average silhouette width")
+
+
+# create dataframe required for ggplot
+df_sil <- data.frame(
+  n_clusters = as.numeric(sub("meta", "", metaK_id)),
+  silhouette = sil_expr
+)
+sil_PLOT <- ggplot(df_sil, aes(x = n_clusters, y = silhouette)) +
+  geom_point(color = "#4287f5", size = 2) +
+  geom_line(color = "#4287f5", linewidth = 0.9) +
+  geom_text(aes(label = round(silhouette, 3)),
+            hjust = -0.3, vjust = -0.3, size = 3.5) +
+  scale_x_continuous(
+    breaks = df_sil$n_clusters,
+    labels = df_sil$n_clusters
+  ) +
+  labs(
+    x = "Number of Clusters",
+    y = "Average Silhouette Width",
+    title = "Silhouette Width by Meta-Cluster Count - Cytokine Subset Lineage"
+  ) +
+  theme_light(base_size = 14)
+
+ggsave(filename = file.path(res_dir, "Silhouette_Plot.png"), plot = sil_PLOT, width = 12, height = 8)
+
+
+
+# ------------------------------------------------------------------------------
+# DIFFERENTIAL ANALYSIS
+#
+#-------------------------------------------------------------------------------
+
+# directory of RDS files
+rds_path <- file.path(analysis_dir, "RDS")
+
+# load sce object
+rds_to_use <- "sce_full_lineage.rds"
+# rds_to_use <- "sce_subset_lineage.rds"
+
+sce_tmp <- readRDS(file.path(rds_path, rds_to_use))
+
+# add meta6 to colData
+sce_tmp$meta6 <- cluster_ids(sce_tmp, "meta6")
+
+# NOTE:
+# - By default, MPE is the reference; Relevel the tissue type
+# relevel: set PBMC as reference
+old_level <- levels(colData(sce_tmp)$tissue_type)
+colData(sce_tmp)$tissue_type <- factor(colData(sce_tmp)$tissue_type, levels = c("PBMC", "MPE"))
+new_level <- levels(colData(sce_tmp)$tissue_type)
+
+design <- createDesignMatrix(ei(sce_tmp), cols_design = "tissue_type")
+contrast <- createContrast(c(0, 1))
+
+# differential abundance (DA) of clusters
+res_DA <- diffcyt(sce_tmp,
+                  clustering_to_use = "meta6",
+                  analysis_type = "DA",
+                  method_DA = "diffcyt-DA-edgeR",
+                  design = design,
+                  contrast = contrast,
+                  verbose = FALSE)
+
+# differential states (DS) within clusters
+# "DS" expects functional markers by default; need to specify lineage markers
+type_markers <- rowData(sce_tmp)$marker_class == "type"
+
+res_DS <- diffcyt(sce_tmp,
+                  clustering_to_use = "meta6",
+                  analysis_type = "DS",
+                  method_DS = "diffcyt-DS-limma",
+                  design = design,
+                  contrast = contrast,
+                  markers_to_test = type_markers,
+                  verbose = FALSE)
+
+
+
+counts_mat <- assay(res_DA$d_counts, "counts")
+cluster2_counts <- counts_mat["2", ]  # cluster 2 is row "2"
+
+sum(cluster2_counts >= 3)  # how many samples meet min_cells
+
+
+
+
+rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS_COMP/Cytokine"
+
+# save RDS
+saveRDS(res_DA, file = file.path(rds_path, "res_DA.rds"))
+saveRDS(res_DS, file = file.path(rds_path, "res_DS.rds"))
+
+
+
+rowData(res_DA$d_counts)
+colData(res_DA$d_counts)
+
+rowData(res_DA$res)
+colData(res_DA$res)
+
+#----------------------
+rowData(res_DS$res)
+colData(res_DS$res)
+
+
+
+
+
+
+
+
+# boxplots of cluster abundance by batch/tissue_type ---------------------------
+
+sel_metaK <- c("meta6")
+
+# boxplot of cluster abundance within sample, subplot by batch, facet by cluster
+abun1_PLOT <- CATALYST::plotAbundances(sce_tmp, k = sel_metaK, by = "cluster_id", group_by = "BATCH") +
+  ggtitle("Abundance by Cluster & Batch")
+ggsave(file.path(res_dir, "abun_cluster_batch_boxplot.png"), plot = abun1_PLOT, width = 10, height = 6, dpi = 300)
+
+# boxplot of tissue type abundance within sample, subplot by tissue type, facet by cluster
+abun2_PLOT <- CATALYST::plotAbundances(sce_tmp, k = sel_metaK, by = "cluster_id", group_by = "tissue_type") +
+  ggtitle("Abundance by Cluster & Tissue Type")
+ggsave(file.path(res_dir, "abun_cluster_tissue_type_boxplot.png"), plot = abun2_PLOT, width = 10, height = 6, dpi = 300)
+
+# barplot with x = each patient, subplot by BATCH
+CATALYST::plotAbundances(sce_tmp, k = sel_metaK, by = "sample_id", group_by = "BATCH")
 
 
 
