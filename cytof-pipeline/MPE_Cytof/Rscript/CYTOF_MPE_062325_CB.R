@@ -1068,12 +1068,17 @@ sce_tmp_0 <- sce_tmp
 sce_tmp_0 <- sce_fl_c5_all_markers
 sce_tmp <- sce_tmp_0
 # NOTE:
-# - for subclustering, need to get meta5 cluster ids from sce_full_lineage, and isolate from sce_main
+# - for subclustering, need to get meta5 cluster ids from sce_full_lineage, and isolate from sce_main (contains all markers)
 # - need to do this to preserve all marker information
 sce_sub <- readRDS("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/Cytokines/full lineage sub clustering/sce_subclust_CD4_meta5_full_lineage.rds")
 
+
 # directory of RDS files
 rds_path <- c("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS")
+
+# sel_panel <- "TBNK"
+# sel_panel <- 'Myeloid'
+sel_panel <- "Cytokines"
 
 # load sce object
 rds_to_use <- "sce_main.rds"
@@ -1103,7 +1108,7 @@ metadata(sce_tmp)$cluster_codes <- metadata(sce_full_lineage)$cluster_codes
 # like above, add sub cluster's meta cluster info to column data
 metadata(sce_tmp)$cluster_codes <- metadata(sce_sub)$cluster_codes
 
-
+sce_tmp <- sce_sub
 sce_tmp_0 <- sce_tmp
 
 # IMPORTANT:
@@ -1174,7 +1179,7 @@ saveRDS(res_DS, file = file.path(rds_path, file_name))
 
 
 # scran - group: clusters ------------------------------------------------------
-cluster_name <- c("meta5")
+cluster_name <- c("meta5_subclust")
 tmp_de_pv <- scran::findMarkers(sce_tmp,
                                 groups=cluster_ids(sce_tmp, cluster_name),
                                 assay.type = "exprs",
@@ -1296,7 +1301,18 @@ write.table(sum_out_all, file = file.path(diff_expr_condition_dir, file_name), s
 
 
 
+# for each cluster, compare tissue type across all markers
+# IMPORTANT:
+# - Filter out Ref PBMC samples
+sce_tmp <- filterSCE(sce_tmp, patient_id != "Ref")
 
+cluster_name <- "meta5_subclust"
+
+all_info <- scran_analysis(sce_tmp, "meta5_subclust", "wilcox", "median")
+
+prefix <- "CD4"
+file_name <- paste(prefix, "scran_wilcoxon.txt", sep = "_")
+write.table(all_info, file.path(analysis_dir, file_name), row.names = FALSE)
 
 
 

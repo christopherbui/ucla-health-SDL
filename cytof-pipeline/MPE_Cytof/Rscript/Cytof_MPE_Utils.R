@@ -104,21 +104,66 @@ plot_elbow_plot <- function(var_percent) {
 
 
 
-approx_silhouette <- function(sce, low_id = 5, hi_id = 20) {
-  # list of cluster nodes
-  metaK_id <- colnames(sce@metadata$cluster_codes)[low_id:hi_id]
+scran_analysis <- function(sce, cluster_name, test_type = "wilcox", average = "median") {
+  clusters <- sort(unique(colData(sce)[[cluster_name]]))
   
-  # list of metacluster id for each cell within each cluster code
-  tmp_meta_clust <- lapply(as.list(metaK_id), function(id) CATALYST::cluster_ids(sce, id))
-  names(tmp_meta_clust) <- metaK_id
+  res_by_cluster <- list()
   
-  # get expresssion matrix; transpose to have cells as rows, markers as columns for bluster
-  mat_expr <- t(as.matrix(assay(sce), "exprs"))
+  for (c in clusters) {
+    message("Processing Cluster: ", c)
+    
+    # subset by cluster
+    sce_tmp <- filterSCE(sce, !!sym(cluster_name) == c)
+    
+    tmp_de_pv <- scran::findMarkers(sce_tmp,
+                                    groups = colData(sce_tmp)$tissue_type,
+                                    assay.type = "exprs",
+                                    test.type = test_type,
+                                    pval.type = "all",
+                                    min.prop = 0.25,
+                                    direction = "up")
+    
+    sum_out <- scran::summaryMarkerStats(sce_tmp,
+                                         groups = colData(sce_tmp)$tissue_type,
+                                         assay.type = "exprs",
+                                         average = average)
+    
+    cluster_res_list <- list()
+    
+    for (tissue in c("PBMC", "MPE")) {
+      if (tissue %in% names(tmp_de_pv)) {
+        # Extract and tag marker names
+        de_df <- as.data.frame(tmp_de_pv[[tissue]])
+        de_df$marker <- rownames(de_df)
+        
+        sum_df <- as.data.frame(sum_out[[tissue]])
+        sum_df$marker <- rownames(sum_df)
+        
+        # inner join on marker
+        merged <- inner_join(sum_df, de_df, by = "marker")
+        
+        # add cluster id & tissue type info
+        merged$cluster <- c
+        merged$tissue_type <- tissue
+        
+        cluster_res_list[[tissue]] <- merged
+      }
+    }
+    
+    # concatenate PBMC and MPE results for this cluster
+    cluster_results <- bind_rows(cluster_res_list)
+    
+    # save to master list
+    res_by_cluster[[as.character(c)]] <- cluster_results
+  }
   
-  # calculate average silhouette score for each cluster code
-  sel_expr <- vapply(tmp_meta_clust, function(x) mean(bluster::approxSilhouette(mat_expr, x)$width), 0)
+  # concatenate all info
+  all_info <- bind_rows(res_by_cluster)
   
-  nclusters <- as.numeric(sapply(metaK_id, function(x) substr(x, 5, n)))
+  # reorder columns
+  all_info <- all_info[, c("marker", "cluster", "tissue_type", setdiff(colnames(all_info), c("marker", "cluster", "tissue_type")))]
+  
+  return(all_info)
 }
 
 
