@@ -1301,7 +1301,7 @@ write.table(sum_out_all, file = file.path(diff_expr_condition_dir, file_name), s
 
 
 
-# for each cluster, compare tissue type across all markers
+# for each cluster, compare tissue type across all markers ---------------------
 # IMPORTANT:
 # - Filter out Ref PBMC samples
 sce_tmp <- filterSCE(sce_tmp, patient_id != "Ref")
@@ -1313,6 +1313,30 @@ all_info <- scran_analysis(sce_tmp, "meta5_subclust", "wilcox", "median")
 prefix <- "CD4"
 file_name <- paste(prefix, "scran_wilcoxon.txt", sep = "_")
 write.table(all_info, file.path(analysis_dir, file_name), row.names = FALSE)
+
+
+
+# violin plots of markers within clusters, between tissue types ----------------
+# Step 3.4. plot expression 
+tmp_sel_markers <- c("CD4")
+metaCluster <- c("meta6")
+sub_sce_tmp1$newID2 <- cluster_ids(sub_sce_tmp1, metaCluster)
+
+VlnPlot_xpr <- scater::plotExpression(sub_sce_tmp1, tmp_sel_markers, x = "newID2",
+                                      exprs_values = "exprs")
+file_name <- file.path("Ranalysis","tmp_VlnPlot.png")
+ggsave(filename = file_name, plot = VlnPlot_xpr, width = 10, height = 10, bg = "white")
+
+scater::plotExpression(
+  sce_tmp_c1,
+  features = "CD4",
+  x = "tissue_type",
+  colour_by = "tissue_type",
+  exprs_values = "exprs"
+) +
+  ggtitle("CD4 expression in Cluster 1") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
 
 
 
@@ -1349,152 +1373,6 @@ dev.off()
 
 
 
-
-#  --------------------- determine which cluster to use ------------------------
-sce_tmp_0 <- sce_tmp
-
-clust5 <- cluster_ids(sce_tmp_0, "meta5")
-clust6 <- cluster_ids(sce_tmp_0, "meta6")
-clust7 <- cluster_ids(sce_tmp_0, "meta7")
-clust8 <- cluster_ids(sce_tmp_0, "meta8")
-clust11 <- cluster_ids(sce_tmp_0, "meta11")
-
-sce_tmp_0$meta5 <- cluster_ids(sce_tmp_0, "meta5")
-sce_tmp_0$meta7 <- cluster_ids(sce_tmp_0, "meta7")
-sce_tmp_0$meta8 <- cluster_ids(sce_tmp_0, "meta8")
-sce_tmp_0$meta11 <- cluster_ids(sce_tmp_0, "meta11")
-
-c5_dp <- dotplotTables(sce_tmp_0,
-                       "meta5",
-                       assay = "exprs",
-                       fun = "median",
-                       scale = TRUE,
-                       q = 0.01)
-
-c6_dp <- dotplotTables(sce_tmp_0,
-                       "meta6",
-                       assay = "exprs",
-                       fun = "median",
-                       scale = TRUE,
-                       q = 0.01)
-
-c7_dp <- dotplotTables(sce_tmp_0,
-                       "meta7",
-                       assay = "exprs",
-                       fun = "median",
-                       scale = TRUE,
-                       q = 0.01)
-
-c8_dp <- dotplotTables(sce_tmp_0,
-                       "meta8",
-                       assay = "exprs",
-                       fun = "median",
-                       scale = TRUE,
-                       q = 0.01)
-
-c10_dp <- dotplotTables(sce_tmp_0,
-                       "meta10",
-                       assay = "exprs",
-                       fun = "median",
-                       scale = TRUE,
-                       q = 0.01)
-
-c11_dp <- dotplotTables(sce_tmp_0,
-                        "meta11",
-                        assay = "exprs",
-                        fun = "median",
-                        scale = TRUE,
-                        q = 0.01)
-
-
-# intra cluster corr
-corr_mat_c5 <- cor(c5_dp$expr_wide)
-pheatmap(corr_mat_c5,
-         cluster_rows = FALSE,
-         cluster_cols = FALSE,
-         main = "Correlation between meta5 clusters",
-         fontsize_row = 10,
-         fontsize_col = 10)
-
-corr_mat_c6 <- cor(c6_dp$expr_wide)
-pheatmap(corr_mat_c6,
-         cluster_rows = FALSE,
-         cluster_cols = FALSE,
-         main = "Correlation between meta6 clusters",
-         fontsize_row = 10,
-         fontsize_col = 10)
-
-corr_mat_c7 <- cor(c7_dp$expr_wide)
-pheatmap(corr_mat_c7,
-         cluster_rows = FALSE,
-         cluster_cols = FALSE,
-         main = "Correlation between meta7 clusters",
-         fontsize_row = 10,
-         fontsize_col = 10)
-
-corr_mat_c8 <- cor(c8_dp$expr_wide)
-pheatmap(corr_mat_c8,
-         cluster_rows = FALSE,
-         cluster_cols = FALSE,
-         main = "Correlation between meta8 clusters",
-         fontsize_row = 10,
-         fontsize_col = 10)
-
-corr_mat_c10 <- cor(c10_dp$expr_wide)
-pheatmap(corr_mat_c10,
-         cluster_rows = FALSE,
-         cluster_cols = FALSE,
-         main = "Correlation between meta10 clusters",
-         fontsize_row = 10,
-         fontsize_col = 10)
-
-corr_mat_c11 <- cor(c11_dp$expr_wide)
-pheatmap(corr_mat_c11,
-         cluster_rows = FALSE,
-         cluster_cols = FALSE,
-         main = "Correlation between meta10 clusters",
-         fontsize_row = 10,
-         fontsize_col = 10)
-
-corr_mat <- cor(c5_dp$expr_wide, c8_dp$expr_wide)
-pheatmap(corr_mat,
-         cluster_rows = FALSE,
-         cluster_cols = FALSE,
-         main = "Correlation between meta5 and meta8 clusters",
-         fontsize_row = 10,
-         fontsize_col = 10)
-
-corr_mat <- cor(c5_dp$expr_wide, c7_dp$expr_wide)
-pheatmap(corr_mat,
-         cluster_rows = FALSE,
-         cluster_cols = FALSE,
-         main = "Correlation between meta5 and meta7 clusters",
-         fontsize_row = 10,
-         fontsize_col = 10)
-
-corr_mat <- cor(c6_dp$expr_wide, c8_dp$expr_wide)
-pheatmap(corr_mat,
-         cluster_rows = FALSE,
-         cluster_cols = FALSE,
-         main = "Correlation between meta6 and meta8 clusters",
-         fontsize_row = 10,
-         fontsize_col = 10)
-
-corr_mat <- cor(c6_dp$expr_wide, c10_dp$expr_wide)
-pheatmap(corr_mat,
-         cluster_rows = FALSE,
-         cluster_cols = FALSE,
-         main = "Correlation between meta6 and meta10 clusters",
-         fontsize_row = 10,
-         fontsize_col = 10)
-
-corr_mat <- cor(c6_dp$expr_wide, c11_dp$expr_wide)
-pheatmap(corr_mat,
-         cluster_rows = FALSE,
-         cluster_cols = FALSE,
-         main = "Correlation between meta6 and meta10 clusters",
-         fontsize_row = 10,
-         fontsize_col = 10)
 
 
 # -------------- subcluster CD4 (meta5 from sce_full_lineage) ------------------

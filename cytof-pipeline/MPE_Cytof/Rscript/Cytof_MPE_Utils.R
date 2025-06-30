@@ -128,7 +128,7 @@ scran_analysis <- function(sce, cluster_name, test_type = "wilcox", average = "m
                                          assay.type = "exprs",
                                          average = average)
     
-    cluster_res_list <- list()
+    cluster_tissue_list <- list()
     
     for (tissue in c("PBMC", "MPE")) {
       if (tissue %in% names(tmp_de_pv)) {
@@ -146,15 +146,15 @@ scran_analysis <- function(sce, cluster_name, test_type = "wilcox", average = "m
         merged$cluster <- c
         merged$tissue_type <- tissue
         
-        cluster_res_list[[tissue]] <- merged
+        cluster_tissue_list[[tissue]] <- merged
       }
     }
     
     # concatenate PBMC and MPE results for this cluster
-    cluster_results <- bind_rows(cluster_res_list)
+    cluster_all_tissue <- bind_rows(cluster_tissue_list)
     
     # save to master list
-    res_by_cluster[[as.character(c)]] <- cluster_results
+    res_by_cluster[[as.character(c)]] <- cluster_all_tissue
   }
   
   # concatenate all info
@@ -166,6 +166,7 @@ scran_analysis <- function(sce, cluster_name, test_type = "wilcox", average = "m
   return(all_info)
 }
 
+violin_plot <- function()
 
 
 
