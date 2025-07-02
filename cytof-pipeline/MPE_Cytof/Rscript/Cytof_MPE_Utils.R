@@ -166,10 +166,50 @@ scran_analysis <- function(sce, cluster_name, test_type = "wilcox", average = "m
   return(all_info)
 }
 
-violin_plot <- function()
 
-
-
+violin_plot_by_cluster <- function(sce, metaK, output_dir) {
+  clusters <- sort(unique(sce[[metaK]]))
+  
+  marker_types <- list(
+    TYPE = c(type_markers(sce)),
+    STATE = c(state_markers(sce))
+  )
+  
+  for (c in clusters) {
+    message("Plotting Cluster: ", c)
+    
+    # subset for current cluster
+    sce_sub <- sce[, sce[[metaK]] == c]
+    
+    for (mt in names(marker_types)) {
+      # violin plot for each marker type
+      markers_to_plot <- marker_types[[mt]]
+      
+      violin_PLOT <- scater::plotExpression(
+        sce_sub,
+        features = markers_to_plot,
+        x = "tissue_type",
+        colour_by = "tissue_type",
+        exprs_values = "exprs",
+        one_facet = FALSE,
+        scattermore = TRUE,
+        point_size = 0
+      ) +
+        ggtitle(paste0("Cluster", c, " - ", mt)) +
+        theme_bw() +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1))
+      
+      # marker_plots[[m]] <- violin_PLOT
+      
+      file_name <- file.path(output_dir, paste0("C5_clust_", c, "_", mt, ".png"))
+      ggsave(filename = file_name,
+             plot = violin_PLOT,
+             width = ceiling(length(markers_to_plot) / 2) * 4,
+             height = 10,
+             dpi = 300)
+    }
+  }
+}
 
 
 

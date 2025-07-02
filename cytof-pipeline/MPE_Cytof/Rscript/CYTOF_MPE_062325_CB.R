@@ -15,6 +15,7 @@ library(pheatmap)
 # library(pandoc)   # required by flowAI
 library(cowplot)
 library(matrixStats)
+library(patchwork)
 
 library(flowCore)
 library(flowAI)
@@ -836,21 +837,14 @@ type_markers <- rownames(sce)[rowData(sce)$marker_class == "type"]
 #   - Get associated `antigen` marker_name from rowData() for subsetting sce object 
 lin_subset_markers <- readLines(file.path(analysis_dir, "lineage_subset_markers_antigen.txt"))
 
-# select markers
+# SELECT MARKERS
 
-# sel_markers <- type_markers
+sel_markers <- type_markers
 # sel_markers <- lin_subset_markers
 
-# partition sce object for selected markers
+# PARTITION SCE OBJECT FOR SELECTED MARKERS
 # sce_full <- sce[sel_markers, ]
 sce_sub <- sce[sel_markers, ]
-
-
-# SAVE SCE SUBSET
-# rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS"
-# file_name <- "sce_subset_lineage.rds"
-# saveRDS(sce_sub, file = file.path(rds_path, file_name))
-
 
 # set cluster info directory
 cluster_info_dir <- file.path(res_dir, "Cluster_Info")
@@ -861,9 +855,9 @@ if (!dir.exists(cluster_info_dir)) dir.create(cluster_info_dir, recursive = TRUE
 # FSOM -------------------------------------------------------------------------
 maxk <- 20
 
+# ASSIGN SCE OBJECT TO 'sce_tmp' FOR PROCESSING
 # sce_tmp <- sce_full
-# sce_tmp <- sce_sub
-sce_tmp <- sce_fl_c5
+sce_tmp <- sce_sub
 
 sel_markers <- rownames(sce_tmp)
 
@@ -873,13 +867,6 @@ sce_tmp <- cluster(sce_tmp,
                    ydim = 10,
                    maxK = maxk,
                    seed = 1234)
-# saveRDS
-# rds_path <- "C:/Users/cdbui/Desktop/SCE_RDS"
-# file_name <- "sce_subset_lineage_AFTER_FSOM.rds"
-# saveRDS(sce_sub, file = file.path(rds_path, file_name))
-
-
-
 
 # matrix showing relationship between SOM (n=100) and consensus cluster (metaX)
 # tmp_cluster_codes <- cluster_codes(sce_tmp)
@@ -909,12 +896,9 @@ pc_prop <- 0.75 #*** proportion of total features to use
 no_pcs <- floor(nrow(sce_tmp) * pc_prop)
 
 sce_tmp <- runPCA(sce_tmp, exprs_values = "exprs", ncomponents = no_pcs)
-# sce_full_lin <- runPCA(sce_full_lin, exprs_values = "exprs", ncomponents = floor(nrow(sce_full_lin) * pc_prop))
-
 
 reducedDimNames(sce_tmp)  #"PCA"
 dim(reducedDim(sce_tmp,"PCA"))   #ncells x no_pc
-
 
 # elbow plot
 pca_matrix <- reducedDim(sce_tmp, "PCA")
@@ -931,9 +915,8 @@ file_name <- paste0("PCA_Elbow_Plot", ".png")
 ggsave(filename = file.path(res_dir, file_name), plot = elbow_PLOT, height = 8, width = 12)
 
 
-
 # UMAP -------------------------------------------------------------------------
-pc_to_use <- 7
+pc_to_use <- 7  # adjust as needed
 
 # parent UMAP directory
 umap_dir <- file.path(res_dir, "UMAP")
@@ -1060,18 +1043,290 @@ ggsave(filename = file.path(res_dir, "Silhouette_Plot.png"), plot = sil_PLOT, wi
 
 
 
+
+# ------------------------------------------------------------------------------
+# SUBCLUSTERING
+#
+# NOTE:
+#   - From previous step, we have:
+#       1. Performed FSOM to acquire cluster ids
+#       2. Use silhouette plot & correlation between cell distribution cluster
+#          groupings to identify right metak clustering to use
+#   - Annotate cells using selected metak
+#
+#   - For subclustering, identify certain cluster id from selected metak to
+#     further cluster
+#
+#     1. Select cells from sce_full_lineage that only belong to selected cluster
+#     2. Re-run FSOM, PCA, UMAP, Dotplot on sce subset (use same full lineage markers)
+#-------------------------------------------------------------------------------
+
+# sel_panel <- "TBNK"
+# sel_panel <- "Myeloid"
+sel_panel <- "Cytokines"
+
+# load sce
+rds_path <- "D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS"
+
+sce_main <- readRDS(file.path(rds_path, sel_panel, "sce_main.rds"))
+sce_full_lineage <- readRDS(file.path(rds_path, sel_panel, "sce_full_lineage.rds"))
+
+tier1_metak <- "meta6"  # metak from tier 1 clustering
+clust_num <- 5  # cluster number from metak to isolate
+
+# prepare sce for subclustering
+sce_sub <- sce_main
+# add sce_full_lineage metacluster id to column data
+sce_sub$meta6_full_lin <- sce_full_lineage$meta6
+
+# get cells of desired tier 1 cluster
+# example: CD4 (cluster 5)
+sce_sub <- sce_sub[, colData(sce_sub)$meta6_full_lin == clust_num]
+
+# get only lineage markers
+lineage_markers <- type_markers(sce_sub)
+sce_sub <- sce_sub[lineage_markers, ]
+
+
+# set prefix for rest of subcluster analysis
+subclust_prefix <- paste0("C", clust_num)
+
+
+# FSOM -------------------------------------------------------------------------
+
+maxk <- 20
+
+# ASSIGN SCE OBJECT TO 'sce_tmp' FOR PROCESSING
+sce_tmp <- sce_sub
+
+sel_markers <- type_markers(sce_tmp)
+
+sce_tmp <- cluster(sce_tmp,
+                   features = sel_markers,
+                   xdim = 10,
+                   ydim = 10,
+                   maxK = maxk,
+                   seed = 1234)
+
+# add meta clusters to column data
+sce_tmp$meta20 <- cluster_ids(sce_tmp, "meta20")
+
+
+# PCA --------------------------------------------------------------------------
+pc_prop <- 0.75 #*** proportion of total features to use
+no_pcs <- floor(nrow(sce_tmp) * pc_prop)
+
+sce_tmp <- runPCA(sce_tmp, exprs_values = "exprs", ncomponents = no_pcs)
+
+reducedDimNames(sce_tmp)  #"PCA"
+dim(reducedDim(sce_tmp,"PCA"))   #ncells x no_pc
+
+# elbow plot
+pca_matrix <- reducedDim(sce_tmp, "PCA")
+
+# either for non-normalized (sum<1)
+var_explained <- attr(pca_matrix, "varExplained")  #***non-normalize to 1
+var_percent <- attr(pca_matrix, "percentVar")   #**in percent
+pca_rotation <- attr(pca_matrix, "rotation") #***markers x no_pc
+
+# plot(var_percent)
+
+elbow_PLOT <- plot_elbow_plot(var_percent)
+file_name <- paste0(subclust_prefix, "_PCA_Elbow_Plot", ".png")
+ggsave(filename = file.path(res_dir, file_name), plot = elbow_PLOT, height = 8, width = 12)
+
+
+# add selected metak column to sce object
+cluster_name <- c("meta7")
+colData(sce_tmp)[[cluster_name]] <- cluster_ids(sce_tmp, cluster_name)
+
+
+
+# UMAP -------------------------------------------------------------------------
+pc_to_use <- 7  # adjust as needed
+
+# parent UMAP directory
+umap_dir <- file.path(res_dir, "UMAP")
+if (!dir.exists(umap_dir)) dir.create(umap_dir, recursive = TRUE)
+
+# directory specifying PC used for UMAP
+umap_pc_dir <- file.path(umap_dir, paste0("PC_", pc_to_use))
+if (!dir.exists(umap_pc_dir)) dir.create(umap_pc_dir, recursive = TRUE)
+
+# remove cells = 1e3; use ~10% of avg_cells_per_sample
+#avg_cells_per_sample <- mean(table(colData(sce_sub)$sample_id))
+n_cells <- 2e4
+sce_tmp <- runDR(sce_tmp, "UMAP", cells = n_cells, features = sel_markers, pca = pc_to_use, seed = 1234)
+
+# specify cluster for plotting
+cluster_name <- c("meta7")
+
+umap_PLOT <- plotDR(sce_tmp, "UMAP", color_by = cluster_name)
+file_name <- paste0(subclust_prefix, "_UMAP_", cluster_name, ".png")
+ggsave(filename = file.path(umap_pc_dir, file_name), plot = umap_PLOT, width = 10, height = 10, bg = "white")
+
+umap_facet_PLOT <- plotDR(sce_tmp, "UMAP", color_by = cluster_name, facet_by = cluster_name)
+file_name <- paste0(subclust_prefix, "_UMAP_", cluster_name, "_facet_by_cluster", ".png")
+ggsave(filename = file.path(umap_pc_dir, file_name), plot = umap_facet_PLOT, width = 12, height = 10, bg = "white")
+
+
+
+# Silhouette Plot --------------------------------------------------------------
+
+# directory of RDS files
+rds_path <- "D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS"
+
+rds_to_use <- c("sce_subclust_on_CD4_meta5_full_lineage.rds")
+
+# load sce object
+sce_tmp <- readRDS(file.path(rds_path, rds_to_use))
+
+
+# list of cluster codes
+metaK_id  <- colnames(sce_tmp@metadata$cluster_codes)[5:20]
+
+# metacluster id for each cell
+tmp_meta_clust <- lapply(as.list(metaK_id), function(id) CATALYST::cluster_ids(sce_tmp, id))
+
+names(tmp_meta_clust) <- metaK_id
+
+mat_expr <- t(as.matrix(assay(sce_tmp,  "exprs")))   #***DO NOT USE assay="exprs" since it gets raw data
+
+sil_expr <- vapply(tmp_meta_clust, function(x) mean(bluster::approxSilhouette(mat_expr, x)$width), 0)
+
+nclusters <- as.numeric(sapply(metaK_id, function(x) substr(x, 5, nchar(x))))
+
+plot(nclusters, sil_expr, xlab="Number of clusters", ylab="Average silhouette width")
+
+
+# create dataframe required for ggplot
+df_sil <- data.frame(
+  n_clusters = as.numeric(sub("meta", "", metaK_id)),
+  silhouette = sil_expr
+)
+sil_PLOT <- ggplot(df_sil, aes(x = n_clusters, y = silhouette)) +
+  geom_point(color = "#4287f5", size = 2) +
+  geom_line(color = "#4287f5", linewidth = 0.9) +
+  geom_text(aes(label = round(silhouette, 3)),
+            hjust = -0.3, vjust = -0.3, size = 3.5) +
+  scale_x_continuous(
+    breaks = df_sil$n_clusters,
+    labels = df_sil$n_clusters
+  ) +
+  labs(
+    x = "Number of Clusters",
+    y = "Average Silhouette Width",
+    title = "Silhouette Width by Metacluster Count"
+  ) +
+  theme_light(base_size = 14)
+
+file_name <- paste0(subclust_prefix, "_Silhouette_Plot.png")
+ggsave(filename = file.path(res_dir, file_name), plot = sil_PLOT, width = 12, height = 8)
+
+
+# Cluster Correlations ---------------------------------------------------------
+#   Note:
+#     - Check correlations of within & between cluster cell distributions to
+#       better determine how many metaclusters to use for Dotplot & future annotation
+sce_tmp$meta5 <- cluster_ids(sce_tmp, "meta5")
+sce_tmp$meta7 <- cluster_ids(sce_tmp, "meta7")
+
+c5_dp <- dotplotTables(sce_tmp,
+                       "meta5",
+                       assay = "exprs",
+                       fun = "median",
+                       scale = TRUE,
+                       q = 0.01)
+
+c7_dp <- dotplotTables(sce_tmp,
+                       "meta7",
+                       assay = "exprs",
+                       fun = "median",
+                       scale = TRUE,
+                       q = 0.01)
+
+
+corr_mat_c5 <- cor(c5_dp$expr_wide)
+pheatmap(corr_mat_c5,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         main = "Correlation between meta5 clusters",
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+corr_mat_c7 <- cor(c7_dp$expr_wide)
+pheatmap(corr_mat_c7,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         main = "Correlation between meta7 clusters",
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+
+corr_mat_c5_c7 <- cor(c5_dp$expr_wide, c7_dp$expr_wide)
+pheatmap(corr_mat_c5_c7,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         main = "Correlation between meta5 and meta7 clusters",
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+
+# Dotplot ----------------------------------------------------------------------
+dotplot_dir <- file.path(res_dir, "Dotplot")
+if (!dir.exists(dotplot_dir)) dir.create(dotplot_dir, recursive = TRUE)
+
+# no scaling
+dotplot_no_scaled_dir <- file.path(dotplot_dir, "Non_Scaled")
+if (!dir.exists(dotplot_no_scaled_dir)) dir.create(dotplot_no_scaled_dir, recursive = TRUE)
+
+# scaling
+dotplot_scaled_dir <- file.path(dotplot_dir, "Scaled")
+if (!dir.exists(dotplot_scaled_dir)) dir.create(dotplot_scaled_dir, recursive = TRUE)
+
+
+sel_metaK <- c("meta5")
+sel_aggregate <- c("median")
+scale_option <- TRUE
+label_for_dotplot <- paste(ifelse(scale_option, "scaled", "non-scaled"), sel_aggregate, "exprs", sep = " ")
+
+
+# set output directory; i.e. scaling or no scaling
+dp_output_dir <- ifelse(scale_option, dotplot_scaled_dir, dotplot_no_scaled_dir)
+
+
+tmp_ftab <- dotplotTables(sce_tmp,
+                          cluster_name = sel_metaK,
+                          assay = "exprs",
+                          fun = sel_aggregate,
+                          scale = scale_option,
+                          q = 0.01)
+
+tmp_fig <- dotplotFig(tmp_ftab$expr_long, lab = label_for_dotplot)
+
+
+# save dotplot matrices
+prefix <- paste0(subclust_prefix, "_", sel_metaK, "_dotplot_", sel_aggregate, ifelse(scale_option, "_SCALED", "_NON_SCALED"))
+write.table(tmp_ftab$expr_wide, file = file.path(dp_output_dir, paste0(prefix, "_wide.txt")),
+            sep = "\t", quote = FALSE, col.names = NA)
+write.table(tmp_ftab$expr_long, file = file.path(dp_output_dir, paste0(prefix, "_long.txt")),
+            sep = "\t", quote = FALSE, col.names = NA)
+
+
+# save dotplot figure
+prefix <- paste0(subclust_prefix, "_", sel_metaK, "_dotplot_", sel_aggregate, ifelse(scale_option, "_SCALED", "_NON_SCALED"))
+ggsave(filename = file.path(dp_output_dir, paste0(prefix, ".png")), plot = tmp_fig, width = 10, height = 8)
+
+
+
 # ------------------------------------------------------------------------------
 # DIFFERENTIAL ANALYSIS
 #
 #-------------------------------------------------------------------------------
-sce_tmp_0 <- sce_tmp
-sce_tmp_0 <- sce_fl_c5_all_markers
-sce_tmp <- sce_tmp_0
 # NOTE:
 # - for subclustering, need to get meta5 cluster ids from sce_full_lineage, and isolate from sce_main (contains all markers)
 # - need to do this to preserve all marker information
-sce_sub <- readRDS("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/Cytokines/full lineage sub clustering/sce_subclust_CD4_meta5_full_lineage.rds")
-
+sce_sub <- readRDS("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/Cytokines/full lineage sub clustering/sce_subclust_on_CD4_meta5_full_lineage.rds")
 
 # directory of RDS files
 rds_path <- c("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS")
@@ -1086,30 +1341,26 @@ rds_to_use <- "sce_main.rds"
 
 sce_tmp <- readRDS(file.path(rds_path, sel_panel, rds_to_use))
 
-# sce_full_lineage <- readRDS(file.path(rds_path, "sce_full_lineage.rds"))
-# sce_sub_lineage <- readRDS(file.path(rds_path, "sce_subset_lineage.rds"))
+# 1. assign meta6 from full lineage to sce_main
+# 2. select only meta6 == 5 (CD4)
+sce_full_lineage <- readRDS(file.path(rds_path, sel_panel, "sce_full_lineage.rds"))
+sce_tmp$meta6_full_lin <- sce_full_lineage$meta6
+sce_tmp <- filterSCE(sce_tmp, meta6_full_lin == 5)
 
-# add meta6 to colData
-# sce_tmp$meta6 <- cluster_ids(sce_tmp, "meta6")  # works if sce_tmp has metadata from clustering
-
-# add cluster ids from sce_full_lineage to sce_main
-cluster_name <- c("meta5")  # check silhouette plot & confirm cluster for each panel
-
-# colData(sce_full_lineage)[[cluster_name]] <- cluster_ids(sce_full_lineage, cluster_name)
-
-sce_tmp$cluster_id <- sce_full_lineage$cluster_id
-colData(sce_tmp)[[cluster_name]] <- colData(sce_full_lineage)[[cluster_name]]
-# like above, add sub cluster's meta cluster info to column data
-sce_tmp$cluster_id <- sce_sub$cluster_id
-
-
-# copy metadata; need for diffcyt
-metadata(sce_tmp)$cluster_codes <- metadata(sce_full_lineage)$cluster_codes
-# like above, add sub cluster's meta cluster info to column data
+# copy metadata from subclustering; diffcyt requires
 metadata(sce_tmp)$cluster_codes <- metadata(sce_sub)$cluster_codes
 
-sce_tmp <- sce_sub
-sce_tmp_0 <- sce_tmp
+# add sub cluster's metacluster info to column data
+sce_tmp$cluster_id <- sce_sub$cluster_id
+
+cluster_name <- c("meta5")  # check silhouette plot & confirm cluster for each panel
+colData(sce_tmp)[[paste0(cluster_name, "_subclust")]] <- colData(sce_sub)[[cluster_name]]
+
+# PREPROCESSING ABOVE ----------------------------------------------------------
+#   Note:
+#     - Preprocessing above done to generate sce_CD4_meta5_all_markers.rds
+
+sce_tmp <- readRDS("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/Cytokines/sce_CD4_meta5_all_markers.rds")
 
 # IMPORTANT:
 # - Filter out Ref PBMC samples
@@ -1159,27 +1410,28 @@ res_DS <- diffcyt(sce_tmp,
                   verbose = FALSE)
 
 
-# rds_path <- paste0("C:/Users/cdbui/Desktop/SCE_RDS_COMP/", selPanel)
+diff_expr_dir <- file.path(analysis_dir, "Results_Subcluster_TEST", "Diff_Expr")
+if (!dir.exists(diff_expr_dir)) dir.create(diff_expr_dir, recursive = TRUE)
 
 # write files
-file_name <- paste0("res_DA.txt")
+file_name <- paste0(subclust_prefix, "_res_DA.txt")
 write.table(rowData(res_DA$res), file = file.path(diff_expr_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
-file_name <- paste0("res_DS.txt")
+file_name <- paste0(subclust_prefix, "_res_DS.txt")
 write.table(rowData(res_DS$res), file = file.path(diff_expr_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
 
 # save RDS
-file_name <- paste0("res_DA_", cluster_name, "_", condition, ".rds")
+file_name <- paste0(subclust_prefix, "_res_DA_", cluster_name, "_", condition, ".rds")
 saveRDS(res_DA, file = file.path(rds_path, file_name))
 
-file_name <- paste0("res_DS_", cluster_name, "_", condition, ".rds")
+file_name <- paste0(subclust_prefix, "_res_DS_", cluster_name, "_", condition, ".rds")
 saveRDS(res_DS, file = file.path(rds_path, file_name))
 
 
 
 # scran - group: clusters ------------------------------------------------------
-cluster_name <- c("meta5_subclust")
+cluster_name <- c("meta5")  # this is the metak from subclustering
 tmp_de_pv <- scran::findMarkers(sce_tmp,
                                 groups=cluster_ids(sce_tmp, cluster_name),
                                 assay.type = "exprs",
@@ -1224,17 +1476,17 @@ sum_out_all <- sum_out_all %>%
 rownames(sum_out_all) <- NULL
 
 # write tables
-diff_expr_dir <- file.path(analysis_dir, "Results_Subcluster", "Diff_Expr")
+diff_expr_dir <- file.path(analysis_dir, "Results_Subcluster_TEST", "Diff_Expr")
 if (!dir.exists(diff_expr_dir)) dir.create(diff_expr_dir, recursive = TRUE)
 
 con <- c("Cluster")
 diff_expr_condition_dir <- file.path(diff_expr_dir, con)
 if (!dir.exists(diff_expr_condition_dir)) dir.create(diff_expr_condition_dir)
 
-file_name <- paste0("scran_de_", cluster_name, "_all_markers.txt")
+file_name <- paste0(subclust_prefix, "_scran_de_", cluster_name, "_all_markers.txt")
 write.table(tmp_de_all, file = file.path(diff_expr_condition_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
-file_name <- paste0("scran_marker_sum_", cluster_name, "_all_markers.txt")
+file_name <- paste0(subclust_prefix, "_scran_marker_sum_", cluster_name, "_all_markers.txt")
 write.table(sum_out_all, file = file.path(diff_expr_condition_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
 
 
@@ -1306,36 +1558,34 @@ write.table(sum_out_all, file = file.path(diff_expr_condition_dir, file_name), s
 # - Filter out Ref PBMC samples
 sce_tmp <- filterSCE(sce_tmp, patient_id != "Ref")
 
-cluster_name <- "meta5_subclust"
+cluster_name <- "meta5"
 
-all_info <- scran_analysis(sce_tmp, "meta5_subclust", "wilcox", "median")
+all_info <- scran_analysis(sce_tmp, "meta5", "wilcox", "median")
 
-prefix <- "CD4"
-file_name <- paste(prefix, "scran_wilcoxon.txt", sep = "_")
-write.table(all_info, file.path(analysis_dir, file_name), row.names = FALSE)
+file_name <- paste(subclust_prefix, "_scran_wilcoxon.txt", sep = "_")
+write.table(all_info, file.path(diff_expr_condition_dir, file_name), row.names = FALSE)
 
 
 
 # violin plots of markers within clusters, between tissue types ----------------
 # Step 3.4. plot expression 
-tmp_sel_markers <- c("CD4")
-metaCluster <- c("meta6")
-sub_sce_tmp1$newID2 <- cluster_ids(sub_sce_tmp1, metaCluster)
+# tmp_sel_markers <- c("CD4")
+# metaCluster <- c("meta6")
+# sce_tmp$newID2 <- cluster_ids(sce_tmp, metaCluster)
+# 
+# VlnPlot_xpr <- scater::plotExpression(sce_tmp,
+#                                       tmp_sel_markers,
+#                                       x = "meta5",
+#                                       exprs_values = "exprs")
+# file_name <- file.path(res_dir, paste0(subclust_prefix, "_tmp_VlnPlot.png"))
+# file_name <- file.path("C:/Users/cdbui/Desktop", paste0(subclust_prefix, "_tmp_VlnPlot.png"))
+# ggsave(filename = file_name, plot = VlnPlot_xpr, width = 10, height = 10, bg = "white")
+sel_metaK <- "meta5"
 
-VlnPlot_xpr <- scater::plotExpression(sub_sce_tmp1, tmp_sel_markers, x = "newID2",
-                                      exprs_values = "exprs")
-file_name <- file.path("Ranalysis","tmp_VlnPlot.png")
-ggsave(filename = file_name, plot = VlnPlot_xpr, width = 10, height = 10, bg = "white")
+violin_output_dir <- c("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/Cytokines/Violine_Plots")
+if (!dir.exists(violin_output_dir)) dir.create(violin_output_dir)
 
-scater::plotExpression(
-  sce_tmp_c1,
-  features = "CD4",
-  x = "tissue_type",
-  colour_by = "tissue_type",
-  exprs_values = "exprs"
-) +
-  ggtitle("CD4 expression in Cluster 1") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+violin_plot_by_cluster(sce_tmp, metaK = sel_metaK, output_dir = violin_output_dir)
 
 
 
@@ -1348,12 +1598,12 @@ cluster_name <- c("meta5")
 # boxplot of cluster abundance within sample, subplot by batch, facet by cluster
 abun1_PLOT <- CATALYST::plotAbundances(sce_tmp, k = cluster_name, by = "cluster_id", group_by = "BATCH") +
   ggtitle("Abundance by Cluster & Batch")
-ggsave(file.path(diff_expr_dir, "abun_cluster_batch_boxplot.png"), plot = abun1_PLOT, width = 10, height = 6, dpi = 300)
+ggsave(file.path(diff_expr_dir, paste0(subclust_prefix, "_abun_cluster_batch_boxplot.png")), plot = abun1_PLOT, width = 10, height = 6, dpi = 300)
 
 # boxplot of tissue type abundance within sample, subplot by tissue type, facet by cluster
 abun2_PLOT <- CATALYST::plotAbundances(sce_tmp, k = cluster_name, by = "cluster_id", group_by = "tissue_type") +
   ggtitle("Abundance by Cluster & Tissue Type")
-ggsave(file.path(diff_expr_dir, "abun_cluster_tissue_type_boxplot.png"), plot = abun2_PLOT, width = 10, height = 6, dpi = 300)
+ggsave(file.path(diff_expr_dir, paste0(subclust_prefix, "_abun_cluster_tissue_type_boxplot.png")), plot = abun2_PLOT, width = 10, height = 6, dpi = 300)
 
 # barplot with x = each patient, subplot by BATCH
 CATALYST::plotAbundances(sce_tmp, k = cluster_name, by = "sample_id", group_by = "BATCH")
@@ -1361,13 +1611,15 @@ CATALYST::plotAbundances(sce_tmp, k = cluster_name, by = "sample_id", group_by =
 
 
 # use PBMC to check batch effect -----------------------------------------------
+
+# INCLUDE PBMC REF!!
 cluster_name <- c("meta5")
 
-sce_all_pbmc <- filterSCE(sce_tmp_0, tissue_type == "PBMC")
+sce_all_pbmc <- filterSCE(sce_de_raw, tissue_type == "PBMC")
 
 clust_tbl_pbmc <- table(cluster_ids(sce_all_pbmc, cluster_name), colData(sce_all_pbmc)$sample_id)
 clust_prop_tbl_pbmc <- prop.table(clust_tbl_pbmc, 2)
-png(file.path(diff_expr_dir, "pbmc_sample_cluster_heatmap.png"), width = 1200, height = 1000)
+png(file.path(diff_expr_dir, paste0(subclust_prefix, "_pbmc_sample_cluster_heatmap.png")), width = 1200, height = 1000)
 pheatmap(clust_prop_tbl_pbmc, cluster_rows = FALSE, cluster_cols = TRUE, main = "PBMC Samples Cluster Proportions")
 dev.off()
 
