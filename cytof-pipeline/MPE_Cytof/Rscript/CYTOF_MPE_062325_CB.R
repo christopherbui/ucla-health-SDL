@@ -15,7 +15,6 @@ library(pheatmap)
 # library(pandoc)   # required by flowAI
 library(cowplot)
 library(matrixStats)
-library(patchwork)
 
 library(flowCore)
 library(flowAI)
@@ -1360,7 +1359,7 @@ colData(sce_tmp)[[paste0(cluster_name, "_subclust")]] <- colData(sce_sub)[[clust
 #   Note:
 #     - Preprocessing above done to generate sce_CD4_meta5_all_markers.rds
 
-sce_tmp <- readRDS("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/Cytokines/sce_CD4_meta5_all_markers.rds")
+sce_tmp <- readRDS("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/Cytokines/sce_subclust_CD4_meta5_all_markers.rds")
 
 # IMPORTANT:
 # - Filter out Ref PBMC samples
@@ -1491,68 +1490,6 @@ write.table(sum_out_all, file = file.path(diff_expr_condition_dir, file_name), s
 
 
 
-
-# scran - group: tissue type ---------------------------------------------------
-tmp_de_pv <- scran::findMarkers(sce_tmp,
-                                groups=colData(sce_tmp)$tissue_type,
-                                assay.type = "exprs",
-                                test.type = "wilcox",
-                                pval.type = "all",   ##c("any", "some", "all"),
-                                min.prop = 0.25,   #default
-                                direction="up")
-tmp_de_all <- bind_rows(
-  lapply(names(tmp_de_pv), function(tissue_type) {
-    df <- as.data.frame(tmp_de_pv[[tissue_type]])
-    df$marker <- rownames(tmp_de_pv[[tissue_type]])
-    df$tissue_type <- tissue_type
-    df
-  })
-)
-tmp_de_all <- tmp_de_all %>%
-  relocate(marker, .before = everything()) %>%
-  relocate(tissue_type, .after = marker) %>%
-  relocate(AUC.PBMC, .before = AUC.MPE)
-
-rownames(tmp_de_all) <- NULL
-
-
-
-
-sum_out <- scran::summaryMarkerStats(sce_tmp,
-                                     groups = colData(sce_tmp)$tissue_type,
-                                     assay.type = "exprs",
-                                     average = "median")
-sum_out_all <- bind_rows(
-  lapply(names(sum_out), function(tissue_type) {
-    df <- as.data.frame(sum_out[[tissue_type]])
-    df$marker <- rownames(sum_out[[tissue_type]])
-    df$tissue_type <- tissue_type
-    df
-  })
-)
-sum_out_all <- sum_out_all %>%
-  relocate(marker, .before = everything()) %>%
-  relocate(tissue_type, .after = marker)
-
-rownames(sum_out_all) <- NULL
-
-
-# write tables
-diff_expr_dir <- file.path(analysis_dir, "Results_Subcluster", "Diff_Expr")
-if (!dir.exists(diff_expr_dir)) dir.create(diff_expr_dir, recursive = TRUE)
-
-con <- c("Tissue_Type")
-diff_expr_condition_dir <- file.path(diff_expr_dir, con)
-if (!dir.exists(diff_expr_condition_dir)) dir.create(diff_expr_condition_dir)
-
-file_name <- paste0("scran_de_", "tissue", "_all_markers.txt")
-write.table(tmp_de_all, file = file.path(diff_expr_condition_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
-
-file_name <- paste0("scran_marker_sum_", "tissue", "_all_markers.txt")
-write.table(sum_out_all, file = file.path(diff_expr_condition_dir, file_name), sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE)
-
-
-
 # for each cluster, compare tissue type across all markers ---------------------
 # IMPORTANT:
 # - Filter out Ref PBMC samples
@@ -1567,26 +1504,57 @@ write.table(all_info, file.path(diff_expr_condition_dir, file_name), row.names =
 
 
 
-# violin plots of markers within clusters, between tissue types ----------------
-# Step 3.4. plot expression 
-# tmp_sel_markers <- c("CD4")
-# metaCluster <- c("meta6")
-# sce_tmp$newID2 <- cluster_ids(sce_tmp, metaCluster)
-# 
-# VlnPlot_xpr <- scater::plotExpression(sce_tmp,
-#                                       tmp_sel_markers,
-#                                       x = "meta5",
-#                                       exprs_values = "exprs")
-# file_name <- file.path(res_dir, paste0(subclust_prefix, "_tmp_VlnPlot.png"))
-# file_name <- file.path("C:/Users/cdbui/Desktop", paste0(subclust_prefix, "_tmp_VlnPlot.png"))
-# ggsave(filename = file_name, plot = VlnPlot_xpr, width = 10, height = 10, bg = "white")
-sel_metaK <- "meta5"
-
+# violin plots of marker expr within clusters, between tissue types ------------
 violin_output_dir <- c("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/Cytokines/Violine_Plots")
 if (!dir.exists(violin_output_dir)) dir.create(violin_output_dir)
 
-violin_plot_by_cluster(sce_tmp, metaK = sel_metaK, output_dir = violin_output_dir)
+# get markers by type
+markers_by_type <- list(
+  TYPE = c(type_markers(sce_tmp)),
+  STATE = c(state_markers(sce_tmp))
+)
 
+do_type <- FALSE   # set for type/state markers
+
+sel_metaK <- "meta5"  # select metacluster column
+mt <- ifelse(do_type, "TYPE", "STATE")  # marker label for plots
+
+sel_markers <- markers_by_type[[mt]] # select markers
+
+clusters <- sort(unique(sce_tmp[[sel_metaK]])) # unique cluster numbers
+
+prefix <- c("C5") # subcluster prefix for file naming
+
+output_dir <- violin_output_dir
+
+for (c in clusters) {
+  message("Plotting Cluster: ", c)
+  
+  # subset for current cluster
+  sce_sub <- filterSCE(sce_tmp, !!sym(sel_metaK) == c)
+  
+  violin_PLOT <- scater::plotExpression(
+    sce_sub,
+    features = sel_markers,
+    x = "tissue_type",
+    colour_by = "tissue_type",
+    exprs_values = "exprs",
+    scales = "free",
+    one_facet = TRUE,
+    scattermore = TRUE,
+    point_size = 1
+  ) +
+    ggtitle(paste0("Cluster ", c, " - ", mt, " Markers")) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 0, hjust = 1))
+  
+  file_name <- file.path(output_dir, paste0(prefix, "_clust_", c, "_", mt, ".png"))
+  ggsave(filename = file_name,
+         plot = violin_PLOT,
+         width = 9,
+         height = 15,
+         dpi = 300)
+}
 
 
 
@@ -1610,6 +1578,46 @@ CATALYST::plotAbundances(sce_tmp, k = cluster_name, by = "sample_id", group_by =
 
 
 
+
+# ------------------------------
+# violin plot 2
+mt <- c("STATE")
+sel_markers <- marker_types[[mt]]
+
+output_dir <- violin_output_dir
+
+for (c in clusters) {
+  message("Plotting Cluster: ", c)
+  
+  # subset for current cluster
+  sce_sub <- filterSCE(sce_tmp, meta5 == c)
+  
+  violin_PLOT <- scater::plotExpression(
+    sce_sub,
+    features = sel_markers,
+    x = "tissue_type",
+    colour_by = "tissue_type",
+    exprs_values = "exprs",
+    scales = "free",
+    one_facet = TRUE,
+    scattermore = TRUE,
+    point_size = 1
+  ) +
+  ggtitle(paste0("Cluster", c, " - ", mt, " Markers")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1))
+    
+  file_name <- file.path(output_dir, paste0("C5_clust_", c, "_", mt, ".png"))
+  ggsave(filename = file_name,
+         plot = violin_PLOT,
+         width = 7,
+         height = 14,
+         dpi = 300)
+}
+
+
+
+
 # use PBMC to check batch effect -----------------------------------------------
 
 # INCLUDE PBMC REF!!
@@ -1623,25 +1631,3 @@ png(file.path(diff_expr_dir, paste0(subclust_prefix, "_pbmc_sample_cluster_heatm
 pheatmap(clust_prop_tbl_pbmc, cluster_rows = FALSE, cluster_cols = TRUE, main = "PBMC Samples Cluster Proportions")
 dev.off()
 
-
-
-
-
-# -------------- subcluster CD4 (meta5 from sce_full_lineage) ------------------
-# load sce
-rds_path <- "D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS"
-
-sel_panel <- "Cytokines"
-
-sce_main <- readRDS(file.path(rds_path, sel_panel, "sce_main.rds"))
-sce_full_lineage <- readRDS(file.path(rds_path, sel_panel, "sce_full_lineage.rds"))
-
-# prepare sce for subclustering
-sce_fl_c5 <- sce_main
-# add sce_full_lineage metacluster id to column data
-sce_fl_c5$meta6_full_lin <- sce_full_lineage$meta6
-# get cells of CD4 (cluster 5)
-sce_fl_c5_all_markers <- sce_fl_c5[, colData(sce_fl_c5)$meta6_full_lin == 5]
-# get only lineage markers
-type_markers <- rownames(sce_fl_c5)[rowData(sce_fl_c5)$marker_class == "type"]
-sce_fl_c5 <- sce_fl_c5[type_markers, ]
