@@ -82,7 +82,7 @@ get_pca_variance_explained <- function(sce) {
 #'
 #' @returns Eblow plot (ggplot object)
 #' 
-plot_elbow_plot <- function(var_percent) {
+plot_elbow_plot <- function(var_percent, sel_panel) {
   elbow_df <- data.frame(
     PC = seq_along(var_percent),
     VarianceExplained = var_percent
@@ -94,7 +94,7 @@ plot_elbow_plot <- function(var_percent) {
     geom_text(aes(label = round(VarianceExplained, 2)),
               hjust = -0.5, vjust = -0.5, size = 3.5) +
     scale_x_continuous(breaks = seq_along(var_percent)) +
-    labs(title = paste0("PCA Elbow Plot", " - ", selPanel),
+    labs(title = paste0("PCA Elbow Plot", " - ", sel_panel),
          x = "Principal Component",
          y = "Percent of Variance Explained") +
     theme_light(base_size = 14)

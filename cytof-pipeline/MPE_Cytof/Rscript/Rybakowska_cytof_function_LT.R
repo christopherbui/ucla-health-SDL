@@ -939,99 +939,88 @@ dotplot_4SDL_Working <- function(sce,
 
 
 
-dotplot_4SDL <- function(sce,
-                         cluster_name,
-                         assay = "exprs",
-                         fun = "median",
-                         scale = TRUE,
-                         pal = hcl.colors(11, "viridis"),
-                         output_dir = NULL) {
-  
+dotplot_LT <- function(sce,
+                       cluster_name,
+                       assay = "exprs",
+                       fun = "median",
+                       scale = TRUE,
+                       q = 0.01,
+                       pal = hcl.colors(11, "viridis"),
+                       output_dir = NULL) {
+  if (is.null(output_dir)){
+     output_dir <- getwd()
+  }
+
   # this allows us to select both raw (from FSOM cluster()) & processed clusters
-  sce$cluster_id <- colData(sce)[[cluster_name]]
-  
+  es_cluster_id <- colData(sce)[[cluster_name]]
   es <- assay(sce, assay) # expression matrix
+
+  if (length(grep("Symbol",colnames(rowData(sce))))>0){
+     rownames(es) <- rowData(sce)$Symbol
+     marker_symbols <- rowData(sce)$Symbol
+  }
+
   th <- rowMedians(es)  # median threshold
-  
-  cs <- seq_len(ncol(sce))  # indices vector with length = number of cells
-  cs <- split(cs, sce$cluster_id)   # split indices into groups based on cid_sel
-  
+  cs <- seq_len(ncol(es))  # indices vector with length = number of cells
+  cs <- split(cs, es_cluster_id)   # split indices into groups based on cid_sel
+
   # return fraction of cells > th per marker
   fq <- sapply(cs, function(i) {
-    rowMeans(es[, i, drop = FALSE] > th)
+      rowMeans(es[, i, drop = FALSE] > th)
   })
-  
+
   # compute mean/median expression by cluster
+  # ms is markers x clusters
   lab <- paste(fun, assay)
-  ms <- CATALYST:::.agg(sce, by = "cluster_id", assay = assay, fun = fun)
-  
-  # use "Symbol" marker name
-  stopifnot(all(rownames(ms) %in% rownames(sce)))   # check
-  marker_symbols <- rowData(sce)$Symbol[match(rownames(ms), rownames(sce))]
-  rownames(ms) <- marker_symbols
-  
-  if (!scale) {
-    # save no scaled ms
-    write.table(ms, file = file.path(output_dir, paste0(cluster_name, "_dotplot_", "NO_SCALED_expr_wide.txt")), sep = "\t", quote = FALSE, col.names = NA) 
+  if (fun =="median"){
+      ms <- sapply(cs, function(i) rowMedians(es[, i, drop = FALSE]))
+  }else{
+      ms <- sapply(cs, function(i) rowMeans(es[, i, drop = FALSE]))
   }
-  
-  if (scale) {
-    lab <- paste("scaled", lab)
-    scale_level <- seq(0, 1, by = 0.1)
-    scale_label <- scale_level[-1]
-    qq_th <- rowQuantiles(es, probs = scale_level)
-    
-    for (i in c(1:nrow(qq_th))) {
-      zero_num <- sum(qq_th[i, ] == 0)
-      if (zero_num > 1) {
-        qq_th[i, 1:zero_num] <- seq(0, qq_th[i, (zero_num + 1)],
-                                    qq_th[i, (zero_num + 1)] / zero_num)[1:zero_num]
-      }
-    }
-    ###qq_th[, 1] <- 0
-    qq_th[, ncol(qq_th)] <- Inf
-    
-    ms_glob <- t(sapply(1:nrow(ms), function(i) cut(ms[i, ], qq_th[i, ], labels = scale_label)))
-    ms_glob <- ifelse(is.na(ms_glob), 0, ms_glob)
-    rownames(ms_glob) <- rownames(ms)
-    
-    ms <- matrix(as.numeric(ms_glob), nrow = nrow(ms_glob), ncol = ncol(ms_glob), dimnames = list(rownames(ms_glob), colnames(ms)))
-    
-    # save scaled ms
-    write.table(ms, file = file.path(output_dir, paste0(cluster_name, "_dotplot_", "SCALED_expr_wide.txt")), sep = "\t", quote = FALSE, col.names = NA)
+  rownames(ms) <- rownames(es)  
+
+  # if scale=TRUE
+  if(scale==TRUE){
+     lab <- paste("scaled", lab)
+     ms <- CATALYST:::.scale_exprs(ms, q = q)
+     fout_wide <- file.path(output_dir, paste0(cluster_name, "_dotplot_",
+                      "SCALED_expr_wide.txt"))
+     fout_long <- file.path(output_dir, paste0(cluster_name, "_dotplot_",
+                       "SCALED_expr_data_long.txt"))   
+  } else {
+     fout_wide <- file.path(output_dir, paste0(cluster_name, "_dotplot_",
+                       "NO_SCALED_expr_wide.txt"))
+     fout_long <- file.path(output_dir, paste0(cluster_name, "_dotplot_",
+                       "NO_SCALED_all_data_long.txt"))
   }
-  
+
   # long format for ggplot
   df <- melt(ms)            # melt(ms): Var1 = marker name, Var2 = cluster id, value = fun() value of marker across clusters
   df$fq <- melt(fq)$value   # melt(fq): Var1 = marker name, Var2 = cluster id, value = proportion > th
-  
+
   colnames(df)[colnames(df) == "Var1"] <- "Symbol"
   colnames(df)[colnames(df) == "Var2"] <- "cluster"
-  
+
   # need to turn cluster column into factor for ggplot
   df$cluster <- factor(df$cluster)
-  
-  if (!scale) {
-    write.table(df, file = file.path(output_dir, paste0(cluster_name, "_dotplot_", "NO_SCALED_all_data_long.txt")), sep = "\t", quote = FALSE, row.names = FALSE)
-  }
-  
-  if (scale) {
-    write.table(df, file = file.path(output_dir, paste0(cluster_name, "_dotplot_", "SCALED_all_data_long.txt")), sep = "\t", quote = FALSE, row.names = FALSE) 
-  }
-  
+  max_expr <- floor(max(df$value))
+
+  write.table(ms, file = fout_wide, sep = "\t", quote = FALSE, row.names=F)
+  write.table(df, file = fout_long, sep = "\t", quote = FALSE, row.names=F)
+
   dot_PLOT <- ggplot(df, aes(Symbol, cluster, col = value, size = fq, label = sprintf("%.2f", value))) +
     geom_point() +
     # geom_text(color = "black", size = 2.5, vjust = 0.5) +  # show mean/median value; comment out line if desired
     scale_x_discrete("marker", limits = marker_symbols, expand = c(0, 1)) +
     scale_y_discrete("cluster_id", limits = unique(df$cluster), expand = c(0, 0.5)) +
-    scale_color_gradientn(lab, breaks = seq(0, 1, 0.5), colors = pal) +
+    scale_color_gradientn(lab, breaks = seq(0, max_expr+0.5, max_expr/4), colors = pal) +
     scale_size_continuous(
       range = c(0, 5),
       labels = formatC(seq(0, 1, 0.25), 2, format = "f")
     ) +
     guides(
       color = guide_colorbar(order = 1),
-      size = guide_legend("frac cells with expr >\n global marker median")
+      size = guide_legend("frac. cells with expr >\n global marker median")
     ) +
     coord_equal() +
     theme_linedraw() +
@@ -1041,9 +1030,10 @@ dotplot_4SDL <- function(sce,
       axis.text.x = element_text(angle = 45, hjust = 1),
       axis.text.y = element_text(size = 8, margin = margin(r = 4))
     )
-  
+
   return(dot_PLOT)
 }
+
 
 
 
@@ -1147,7 +1137,96 @@ dotplot_OG <- function(sce,
 
 
 
+dotplotTables <- function(sce,
+                          cluster_name,
+                          assay = "exprs",
+                          fun = "median",
+                          scale = TRUE,
+                          q = 0.01){
+  
+  # this allows us to select both raw (from FSOM cluster()) & processed clusters
+  isIDExist <- which(colnames(colData(sce))==cluster_name)
+  if (length(isIDExist)==1){
+    es_cluster_id <- colData(sce)[,cluster_name]
+  } else {
+    es_cluster_id <- cluster_ids(sce, cluster_name)
+  }
+  
+  es <- assay(sce, assay) # expression matrix
+  if (length(grep("Symbol",colnames(rowData(sce))))>0){
+    rownames(es) <- rowData(sce)$Symbol
+    marker_symbols <- rowData(sce)$Symbol
+  }
+  th <- rowMedians(es)  # median threshold
+  
+  cs <- seq_len(ncol(es))  # indices vector with length = number of cells
+  cs <- split(cs, es_cluster_id)   # split indices into groups based on cid_sel
+  
+  # return fraction of cells > th per marker
+  fq <- sapply(cs, function(i) {
+    rowMeans(es[, i, drop = FALSE] > th)
+  })
+  
+  # compute mean/median expression by cluster
+  # ms is markers x clusters
+  lab <- paste(fun, assay)
+  if (fun =="median"){
+    ms <- sapply(cs, function(i) rowMedians(es[, i, drop = FALSE]))
+  }else{
+    ms <- sapply(cs, function(i) rowMeans(es[, i, drop = FALSE]))
+  }
+  rownames(ms) <- rownames(es)   
+  
+  # if scale=TRUE
+  if(scale==TRUE){
+    lab <- paste("scaled", lab)
+    ms <- CATALYST:::.scale_exprs(ms, q = q)    
+  } 
+  
+  # long format for ggplot
+  df <- melt(ms)            # melt(ms): Var1 = marker name, Var2 = cluster id, value = fun() value of marker across clusters
+  df$fq <- melt(fq)$value   # melt(fq): Var1 = marker name, Var2 = cluster id, value = proportion > th
+  
+  colnames(df)[colnames(df) == "Var1"] <- "Symbol"
+  colnames(df)[colnames(df) == "Var2"] <- "cluster"
+  
+  # need to turn cluster column into factor for ggplot
+  df$cluster <- factor(df$cluster)
+  
+  list(expr_wide = ms, expr_long = df)
+}
 
+dotplotFig <- function(df,
+                       pal = hcl.colors(11, "viridis"),
+                       lab = c("scaled median exprs")){
+  
+  marker_symbols <- df$Symbol[!duplicated(df$Symbol)]
+  max_expr <- floor(max(df$value))
+  
+  dot_PLOT <- ggplot(df, aes(Symbol, cluster, col = value, size = fq, label = sprintf("%.2f", value))) +
+    geom_point() +
+    scale_x_discrete("marker", limits = marker_symbols, expand = c(0, 1)) +
+    scale_y_discrete("cluster_id", limits = unique(df$cluster), expand = c(0, 0.5)) +
+    scale_color_gradientn(lab, breaks = seq(0, max_expr+0.5, max_expr/4), colors = pal) +
+    scale_size_continuous(
+      range = c(0, 5),
+      labels = formatC(seq(0, 1, 0.25), 2, format = "f")
+    ) +
+    guides(
+      color = guide_colorbar(order = 1),
+      size = guide_legend("frac. cells with expr >\n global marker median")
+    ) +
+    coord_equal() +
+    theme_linedraw() +
+    theme(
+      panel.grid = element_blank(),
+      panel.border = element_blank(),
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      axis.text.y = element_text(size = 8, margin = margin(r = 4))
+    )
+  
+  return(dot_PLOT)
+}
 
 
 

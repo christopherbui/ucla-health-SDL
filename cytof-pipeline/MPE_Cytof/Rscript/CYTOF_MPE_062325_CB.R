@@ -1090,6 +1090,28 @@ sce_sub <- sce_sub[lineage_markers, ]
 # set prefix for rest of subcluster analysis
 subclust_prefix <- paste0("C", clust_num)
 
+# ------------------------------------------------------------------------------
+
+# PREP SCE OBJECTS FOR SUBCLUSTERING
+clusters <- sort(unique(colData(sce_sub)$meta6_full_lin))
+
+combined_clusters <- c(1, 2, 3)
+sce_combined <- filterSCE(sce_sub, meta6_full_lin %in% combined_clusters)
+file_name <- file.path(rds_path, sel_panel, paste0("C123_sce_all_markers_meta6_full_lin", ".rds"))
+saveRDS(sce_combined, file = file_name)
+
+for (c in setdiff(clusters, combined_clusters)) {
+  message("Saving SCE for cluster: ", c)
+  
+  # subset sce
+  sce_clust <- filterSCE(sce_sub, meta6_full_lin == c)
+  
+  # save rds
+  file_name <- file.path(rds_path, sel_panel, "to_subclust", paste0("C", c, "_sce_all_markers_meta6_full_lin", ".rds"))
+  saveRDS(sce_clust, file = file_name)
+}
+
+
 
 # FSOM -------------------------------------------------------------------------
 
@@ -1630,4 +1652,223 @@ clust_prop_tbl_pbmc <- prop.table(clust_tbl_pbmc, 2)
 png(file.path(diff_expr_dir, paste0(subclust_prefix, "_pbmc_sample_cluster_heatmap.png")), width = 1200, height = 1000)
 pheatmap(clust_prop_tbl_pbmc, cluster_rows = FALSE, cluster_cols = TRUE, main = "PBMC Samples Cluster Proportions")
 dev.off()
+
+
+
+
+# ------------------------------------------------------------------------------
+# FULL ANALYSIS LOOP - SUBCLUSTERING
+# 
+#-------------------------------------------------------------------------------
+
+sel_panel_list <- c("TBNK", "Myeloid", "Cytokines")
+
+rds_path <- "D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS"
+
+sel_panel <- sel_panel_list[3]
+
+res_dir <- file.path(rds_path, sel_panel, "Results_Subcluster")
+if (!dir.exists(res_dir)) dir.create(res_dir)
+
+rds_subclust_dir <- file.path(res_dir, "RDS_Subcluster")
+if (!dir.exists(rds_subclust_dir)) dir.create(rds_subclust_dir)
+
+
+for (i in sel_panel_list[3]) {
+  
+  sel_panel <- i
+  
+  sce_to_subclust_path <- file.path(rds_path, sel_panel, "to_subclust")
+  sce_files <- list.files(sce_to_subclust_path)
+  
+  for (f in sce_files) {
+    # READ SCE
+    # subclust_prefix <- substr(sce_files[f], 1, 2)
+    subclust_prefix <- sub("_.*", "", f)
+    
+    message("Doing ", subclust_prefix)
+    
+    sce_tmp_0 <- readRDS(file.path(sce_to_subclust_path, f))
+    
+    # filter for only type markers for PCA & clustering
+    sce_tmp <- sce_tmp_0[rowData(sce_tmp_0)$marker_class == "type", ]
+    
+    # CHECK
+    #   1. only 1 cluster number for meta6_full_lin
+    #   2. cluster number matches f
+    # sce_tmp_clusters <- unique(colData(sce_tmp)$meta6_full_lin)
+    # if (length(sce_tmp_clusters) != 1 || sce_tmp_clusters != f) {
+    #   stop(paste0("Mismatch: file prefix cluster C", f, 
+    #               " but SCE has meta6_full_lin = ", paste(sce_tmp_clusters, collapse = ", ")))
+    # }
+    
+    
+    
+    # PCA
+    message(paste0(subclust_prefix, ": PCA"))
+    
+    pc_prop <- 0.75
+    no_pcs <- floor(nrow(sce_tmp) * pc_prop)
+    
+    sce_tmp <- runPCA(sce_tmp, exprs_values = "exprs", ncomponents = no_pcs)
+    
+    # elbow plot
+    pca_matrix <- reducedDim(sce_tmp, "PCA")
+    
+    # either for non-normalized (sum<1)
+    var_explained <- attr(pca_matrix, "varExplained")  #***non-normalize to 1
+    var_percent <- attr(pca_matrix, "percentVar")   #**in percent
+    pca_rotation <- attr(pca_matrix, "rotation") #***markers x no_pc
+    
+    elbow_PLOT <- plot_elbow_plot(var_percent, sel_panel)
+    file_name <- paste0(subclust_prefix, "_PCA_Elbow_Plot", ".png")
+    ggsave(filename = file.path(res_dir, file_name), plot = elbow_PLOT, height = 8, width = 12)
+    
+    
+    
+    # FSOM
+    message(paste0(subclust_prefix, ": FSOM"))
+
+    maxk <- 20
+    sel_markers <- type_markers(sce_tmp)
+
+    sce_tmp <- cluster(sce_tmp,
+                       features = sel_markers,
+                       xdim = 10,
+                       ydim = 10,
+                       maxK = maxk,
+                       seed = 1234)
+
+    # save RDS
+    rds_dir <- file.path(res_dir, "RDS_Subcluster")
+    if (!dir.exists(rds_dir)) dir.create(rds_dir)
+    
+    saveRDS(sce_tmp, file = file.path(rds_subclust_dir, paste0(subclust_prefix, "_sce_subclust_full_lineage.rds")))
+  
+  }
+}
+
+# 1. DETERMINE PC VIA PCA ELBOW PLOT
+# 2. runDR
+# 3. SILHOUETTE PLOT
+
+sel_panel_list <- c("TBNK", "Myeloid", "Cytokines")
+
+rds_path <- "D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS"
+
+sel_panel <- sel_panel_list[3]
+
+res_dir <- file.path(rds_path, sel_panel, "Results_Subcluster")
+if (!dir.exists(res_dir)) dir.create(res_dir)
+
+rds_subclust_dir <- file.path(res_dir, "RDS_Subcluster")
+if (!dir.exists(rds_subclust_dir)) dir.create(rds_subclust_dir)
+
+
+# rds files after fsom
+after_fsom_rds <- list.files(rds_subclust_dir)
+
+# ADJUST AS NEEDED
+pc_list <- list(
+  C4 = 6,
+  C5 = 7,
+  C6 = 5,
+  Myeloid = 10
+)
+
+for (i in sel_panel_list[3]) {
+  
+  sel_panel <- i
+  
+  sce_files <- after_fsom_rds
+  
+  for (f in seq_along(sce_files)) {
+    # READ SCE
+    subclust_prefix <- sub("_.*", "", sce_files[f])
+    
+    if (!subclust_prefix %in% names(pc_list)) {
+      stop(paste0("SCE file has undetermined PC; subclust_prefix ", subclust_prefix, " not in pc_list."))
+    }
+    
+    message("Doing ", subclust_prefix)
+    
+    sce_tmp <- readRDS(file.path(rds_subclust_dir, sce_files[f]))
+    
+    sel_markers <- type_markers(sce_tmp)
+    
+    # UMAP
+    message(paste0(subclust_prefix, ": UMAP"))
+    
+    pc_to_use <- pc_list[[subclust_prefix]]
+    
+    # parent UMAP directory
+    umap_dir <- file.path(res_dir, "UMAP")
+    if (!dir.exists(umap_dir)) dir.create(umap_dir, recursive = TRUE)
+    
+    # directory specifying PC used for UMAP
+    umap_pc_dir <- file.path(umap_dir, paste0(subclust_prefix, "_PC_", pc_to_use))
+    if (!dir.exists(umap_pc_dir)) dir.create(umap_pc_dir, recursive = TRUE)
+    
+    n_cells <- 2e4
+    sce_tmp <- runDR(sce_tmp, "UMAP", cells = n_cells, features = sel_markers, pca = pc_to_use, seed = 1234)
+    
+    # save rds
+    saveRDS(sce_tmp, file = file.path(rds_subclust_dir, paste0(subclust_prefix, "_sce_subclust_full_lineage_wUMAP.rds")))
+    
+
+    # SILHOUETTE PLOT
+    message(paste0(subclust_prefix, ": Silhouette Plot"))
+    
+    # list of cluster codes
+    metaK_id  <- colnames(sce_tmp@metadata$cluster_codes)[3:20]
+    
+    # metacluster id for each cell
+    tmp_meta_clust <- lapply(as.list(metaK_id), function(id) CATALYST::cluster_ids(sce_tmp, id))
+    
+    names(tmp_meta_clust) <- metaK_id
+    
+    mat_expr <- t(as.matrix(assay(sce_tmp,  "exprs")))   #***DO NOT USE assay="exprs" since it gets raw data
+    
+    sil_expr <- vapply(tmp_meta_clust, function(x) mean(bluster::approxSilhouette(mat_expr, x)$width), 0)
+    
+    nclusters <- as.numeric(sapply(metaK_id, function(x) substr(x, 5, nchar(x))))
+    
+    # create dataframe required for ggplot
+    df_sil <- data.frame(
+      n_clusters = as.numeric(sub("meta", "", metaK_id)),
+      silhouette = sil_expr
+    )
+    sil_PLOT <- ggplot(df_sil, aes(x = n_clusters, y = silhouette)) +
+      geom_point(color = "#4287f5", size = 2) +
+      geom_line(color = "#4287f5", linewidth = 0.9) +
+      geom_text(aes(label = round(silhouette, 3)),
+                hjust = -0.3, vjust = -0.3, size = 3.5) +
+      scale_x_continuous(
+        breaks = df_sil$n_clusters,
+        labels = df_sil$n_clusters
+      ) +
+      labs(
+        x = "Number of Clusters",
+        y = "Average Silhouette Width",
+        title = "Silhouette Width by Metacluster"
+      ) +
+      theme_light(base_size = 14)
+    
+    file_name <- paste0(subclust_prefix, "_Silhouette_Plot.png")
+    ggsave(filename = file.path(res_dir, file_name), plot = sil_PLOT, width = 12, height = 8)
+  }
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
