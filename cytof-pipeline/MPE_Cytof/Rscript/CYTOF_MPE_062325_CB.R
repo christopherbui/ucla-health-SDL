@@ -682,8 +682,8 @@ allSampleInfo <- allSampleInfo[, -1]
 
 # select panel
 # selPanel <- c("TBNK")
-selPanel <- c("Myeloid")
-# selPanel <- c("Cytokines")
+# selPanel <- c("Myeloid")
+selPanel <- c("Cytokines")
 
 # get panel info
 fin_panel <- paste(selPanel, "_markers_022625.txt", sep="")
@@ -1074,7 +1074,7 @@ sce_main <- readRDS(file.path(rds_path, sel_panel, "sce_main.rds"))
 sce_full_lineage <- readRDS(file.path(rds_path, sel_panel, "sce_full_lineage.rds"))
 
 tier1_metak <- "meta6"  # metak from tier 1 clustering
-clust_num <- 5  # cluster number from metak to isolate
+clust_num <- 4  # cluster number from metak to isolate
 
 # prepare sce for subclustering
 sce_sub <- sce_main
@@ -1167,23 +1167,25 @@ colData(sce_tmp)[[cluster_name]] <- cluster_ids(sce_tmp, cluster_name)
 
 
 # UMAP -------------------------------------------------------------------------
-pc_to_use <- 7  # adjust as needed
+pc_to_use <- 6  # adjust as needed
 
 # parent UMAP directory
 umap_dir <- file.path(res_dir, "UMAP")
 if (!dir.exists(umap_dir)) dir.create(umap_dir, recursive = TRUE)
 
 # directory specifying PC used for UMAP
-umap_pc_dir <- file.path(umap_dir, paste0("PC_", pc_to_use))
+umap_pc_dir <- file.path(umap_dir, paste0(subclust_prefix, "_PC_", pc_to_use))
 if (!dir.exists(umap_pc_dir)) dir.create(umap_pc_dir, recursive = TRUE)
 
 # remove cells = 1e3; use ~10% of avg_cells_per_sample
 #avg_cells_per_sample <- mean(table(colData(sce_sub)$sample_id))
+sel_markers <- type_markers(sce_tmp)
+
 n_cells <- 2e4
 sce_tmp <- runDR(sce_tmp, "UMAP", cells = n_cells, features = sel_markers, pca = pc_to_use, seed = 1234)
 
 # specify cluster for plotting
-cluster_name <- c("meta7")
+cluster_name <- c("meta6")
 
 umap_PLOT <- plotDR(sce_tmp, "UMAP", color_by = cluster_name)
 file_name <- paste0(subclust_prefix, "_UMAP_", cluster_name, ".png")
