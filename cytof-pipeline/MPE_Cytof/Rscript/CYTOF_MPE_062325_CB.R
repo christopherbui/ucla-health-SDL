@@ -682,8 +682,8 @@ allSampleInfo <- allSampleInfo[, -1]
 
 # select panel
 # selPanel <- c("TBNK")
-# selPanel <- c("Myeloid")
-selPanel <- c("Cytokines")
+selPanel <- c("Myeloid")
+# selPanel <- c("Cytokines")
 
 # get panel info
 fin_panel <- paste(selPanel, "_markers_022625.txt", sep="")
@@ -825,6 +825,9 @@ dev.off()
 
 
 # ------------------------------------------------------------------------------
+# sel_panel <- "TBNK"
+sel_panel <- "Myeloid"
+# sel_panel <- "Cytokines"
 
 # Select Markers To Use
 
@@ -858,7 +861,7 @@ maxk <- 20
 # sce_tmp <- sce_full
 sce_tmp <- sce_sub
 
-sel_markers <- rownames(sce_tmp)
+sel_markers <- type_markers(sce_tmp)
 
 sce_tmp <- cluster(sce_tmp,
                    features = sel_markers,
@@ -871,7 +874,7 @@ sce_tmp <- cluster(sce_tmp,
 # tmp_cluster_codes <- cluster_codes(sce_tmp)
 
 # add meta clusters to column data
-sce_tmp$meta20 <- cluster_ids(sce_tmp, "meta20")
+sce_tmp$meta6 <- cluster_ids(sce_tmp, "meta6")
 
 # sce_full_lin$meta20 <- cluster_ids(sce_full_lin, "meta20")
 
@@ -894,7 +897,7 @@ sce_tmp$meta20 <- cluster_ids(sce_tmp, "meta20")
 pc_prop <- 0.75 #*** proportion of total features to use
 no_pcs <- floor(nrow(sce_tmp) * pc_prop)
 
-sce_tmp <- runPCA(sce_tmp, exprs_values = "exprs", ncomponents = no_pcs)
+sce_tmp <- runPCA(sce_tmp, exprs_values = "exprs", subset_row = sel_markers, ncomponents = no_pcs)
 
 reducedDimNames(sce_tmp)  #"PCA"
 dim(reducedDim(sce_tmp,"PCA"))   #ncells x no_pc
@@ -909,13 +912,13 @@ pca_rotation <- attr(pca_matrix, "rotation") #***markers x no_pc
 
 # plot(var_percent)
 
-elbow_PLOT <- plot_elbow_plot(var_percent)
+elbow_PLOT <- plot_elbow_plot(var_percent, sel_panel = sel_panel)
 file_name <- paste0("PCA_Elbow_Plot", ".png")
 ggsave(filename = file.path(res_dir, file_name), plot = elbow_PLOT, height = 8, width = 12)
 
 
 # UMAP -------------------------------------------------------------------------
-pc_to_use <- 7  # adjust as needed
+pc_to_use <- 4  # adjust as needed
 
 # parent UMAP directory
 umap_dir <- file.path(res_dir, "UMAP")
@@ -932,7 +935,7 @@ sce_tmp <- runDR(sce_tmp, "UMAP", cells = n_cells, features = sel_markers, pca =
 
 # specify cluster for plotting
 # cluster_name <- c("meta20")
-cluster_name <- c("meta7")
+cluster_name <- c("meta5")
 
 umap_PLOT <- plotDR(sce_tmp, "UMAP", color_by = cluster_name)
 file_name <- paste0("UMAP_", cluster_name, ".png")
@@ -957,7 +960,7 @@ dotplot_scaled_dir <- file.path(dotplot_dir, "Scaled")
 if (!dir.exists(dotplot_scaled_dir)) dir.create(dotplot_scaled_dir, recursive = TRUE)
 
 
-sel_metaK <- c("meta20")
+sel_metaK <- c("meta5")
 sel_aggregate <- c("median")
 scale_option <- FALSE
 label_for_dotplot <- paste(ifelse(scale_option, "scaled", "non-scaled"), sel_aggregate, "exprs", sep = " ")
@@ -1001,14 +1004,14 @@ sce_tmp <- readRDS(file.path(rds_path, "sce_subset_lineage.rds"))
 
 
 # list of cluster codes
-metaK_id  <- colnames(sce_tmp@metadata$cluster_codes)[5:20]
+metaK_id  <- colnames(sce_tmp2@metadata$cluster_codes)[3:20]
 
 # metacluster id for each cell
-tmp_meta_clust <- lapply(as.list(metaK_id), function(id) CATALYST::cluster_ids(sce_tmp, id))
+tmp_meta_clust <- lapply(as.list(metaK_id), function(id) CATALYST::cluster_ids(sce_tmp2, id))
 
 names(tmp_meta_clust) <- metaK_id
 
-mat_expr <- t(as.matrix(assay(sce_tmp,  "exprs")))   #***DO NOT USE assay="exprs" since it gets raw data
+mat_expr <- t(as.matrix(assay(sce_tmp2,  "exprs")))   #***DO NOT USE assay="exprs" since it gets raw data
 
 sil_expr <- vapply(tmp_meta_clust, function(x) mean(bluster::approxSilhouette(mat_expr, x)$width), 0)
 
@@ -1130,7 +1133,7 @@ sce_tmp <- cluster(sce_tmp,
                    seed = 1234)
 
 # add meta clusters to column data
-sce_tmp$meta20 <- cluster_ids(sce_tmp, "meta20")
+sce_tmp$meta6 <- cluster_ids(sce_tmp, "meta6")
 
 
 # PCA --------------------------------------------------------------------------
@@ -1665,7 +1668,7 @@ sel_panel_list <- c("TBNK", "Myeloid", "Cytokines")
 
 rds_path <- "D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS"
 
-sel_panel <- sel_panel_list[3]
+sel_panel <- sel_panel_list[1]
 
 res_dir <- file.path(rds_path, sel_panel, "Results_Subcluster")
 if (!dir.exists(res_dir)) dir.create(res_dir)
@@ -1674,11 +1677,11 @@ rds_subclust_dir <- file.path(res_dir, "RDS_Subcluster")
 if (!dir.exists(rds_subclust_dir)) dir.create(rds_subclust_dir)
 
 
-for (i in sel_panel_list[3]) {
+for (i in sel_panel_list[1]) {
   
   sel_panel <- i
   
-  sce_to_subclust_path <- file.path(rds_path, sel_panel, "to_subclust")
+  sce_to_subclust_path <- file.path(rds_path, sel_panel, "To_Subclust")
   sce_files <- list.files(sce_to_subclust_path)
   
   for (f in sce_files) {
@@ -1691,6 +1694,9 @@ for (i in sel_panel_list[3]) {
     sce_tmp_0 <- readRDS(file.path(sce_to_subclust_path, f))
     
     # filter for only type markers for PCA & clustering
+    # !!!!
+    # CHECK THIS STEP IF DOING ANY MARKER SUBSET
+    # !!!!
     sce_tmp <- sce_tmp_0[rowData(sce_tmp_0)$marker_class == "type", ]
     
     # CHECK
@@ -1707,7 +1713,7 @@ for (i in sel_panel_list[3]) {
     # PCA
     message(paste0(subclust_prefix, ": PCA"))
     
-    pc_prop <- 0.75
+    pc_prop <- 1
     no_pcs <- floor(nrow(sce_tmp) * pc_prop)
     
     sce_tmp <- runPCA(sce_tmp, exprs_values = "exprs", ncomponents = no_pcs)
@@ -1740,10 +1746,10 @@ for (i in sel_panel_list[3]) {
                        seed = 1234)
 
     # save RDS
-    rds_dir <- file.path(res_dir, "RDS_Subcluster")
-    if (!dir.exists(rds_dir)) dir.create(rds_dir)
+    # rds_dir <- file.path(res_dir, "RDS_Subcluster")
+    # if (!dir.exists(rds_dir)) dir.create(rds_dir)
     
-    saveRDS(sce_tmp, file = file.path(rds_subclust_dir, paste0(subclust_prefix, "_sce_subclust_full_lineage.rds")))
+    saveRDS(sce_tmp, file = file.path(rds_subclust_dir, paste0(subclust_prefix, "_sce_subclust_subset_lineage.rds")))
   
   }
 }
@@ -1756,7 +1762,7 @@ sel_panel_list <- c("TBNK", "Myeloid", "Cytokines")
 
 rds_path <- "D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS"
 
-sel_panel <- sel_panel_list[3]
+sel_panel <- sel_panel_list[1]
 
 res_dir <- file.path(rds_path, sel_panel, "Results_Subcluster")
 if (!dir.exists(res_dir)) dir.create(res_dir)
@@ -1769,14 +1775,28 @@ if (!dir.exists(rds_subclust_dir)) dir.create(rds_subclust_dir)
 after_fsom_rds <- list.files(rds_subclust_dir)
 
 # ADJUST AS NEEDED
+
+# CYTOKINE FULL LINEAGE
+# pc_list <- list(
+#   C4 = 6,
+#   C5 = 7,
+#   C6 = 5,
+#   Myeloid = 10
+# )
+
+# TBNK SUBSET LINEAGE
+# pc_list <- list(
+#   C2 = 8,
+#   C3C4 = 10,
+#   C5C9 = 10,
+#   C6C7 = 4,
+#   C8 = 5
+# )
 pc_list <- list(
-  C4 = 6,
-  C5 = 7,
-  C6 = 5,
-  Myeloid = 10
+  C1 = 7
 )
 
-for (i in sel_panel_list[3]) {
+for (i in sel_panel_list[1]) {
   
   sel_panel <- i
   
