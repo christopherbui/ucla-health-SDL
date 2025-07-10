@@ -711,7 +711,7 @@ analysis_dir <- file.path(workFolder, "CYTOF_data", "Analysis", selPanel)
 if (!dir.exists(analysis_dir)) dir.create(analysis_dir, recursive = TRUE)
 
 # set results directory
-res_dir <- file.path(analysis_dir, "Results_Subcluster")
+res_dir <- file.path(analysis_dir, "Results_Full_Lineage")
 if (!dir.exists(res_dir)) dir.create(res_dir, recursive = TRUE)
 
 # get fcs files
@@ -960,7 +960,7 @@ dotplot_scaled_dir <- file.path(dotplot_dir, "Scaled")
 if (!dir.exists(dotplot_scaled_dir)) dir.create(dotplot_scaled_dir, recursive = TRUE)
 
 
-sel_metaK <- c("meta5")
+sel_metaK <- c("meta6")
 sel_aggregate <- c("median")
 scale_option <- FALSE
 label_for_dotplot <- paste(ifelse(scale_option, "scaled", "non-scaled"), sel_aggregate, "exprs", sep = " ")
@@ -1042,6 +1042,97 @@ sil_PLOT <- ggplot(df_sil, aes(x = n_clusters, y = silhouette)) +
   theme_light(base_size = 14)
 
 ggsave(filename = file.path(res_dir, "Silhouette_Plot.png"), plot = sil_PLOT, width = 12, height = 8)
+
+
+
+
+
+# ------------------------------------------------------------------------------
+# DIFFERENTIAL ANALYSIS ON FULL LINEAGE
+#
+# NOTE:
+#   - Trying to see if there's difference of marker expression between
+#     tissue types among tier1 clustering on full lineage
+# ------------------------------------------------------------------------------
+
+# !!! REMOVE REF
+sce_tmp <- filterSCE(sce_tmp, patient_id != "Ref")
+
+
+# SCRAN - TISSUE
+cluster_name <- c("meta6")
+clusters_to_do <- c(6)
+test_type <- "wilcox"
+
+all_info <- scran_analysis(sce_tmp, cluster_name, clusters_to_do, test_type, "median")
+
+file_name <- paste0(sel_panel, "_", cluster_name, "_scran_", test_type, ".csv")
+write.table(all_info, file.path(res_dir, file_name), row.names = FALSE, quote = FALSE)
+
+
+
+
+
+# DIFFCYT ----------------------------------------------------------------------
+
+condition <- "tissue_type"
+design <- createDesignMatrix(ei(sce_tmp), cols_design = condition)
+contrast <- createContrast(c(0, 1))
+
+
+# differential abundance (DA) of clusters
+cluster_name <- "meta6"
+res_DA <- diffcyt(sce_tmp,
+                  clustering_to_use = cluster_name,
+                  analysis_type = "DA",
+                  method_DA = "diffcyt-DA-edgeR",
+                  design = design,
+                  contrast = contrast,
+                  verbose = FALSE)
+
+# differential states (DS) within clusters
+# "DS" expects functional markers by default; need to specify lineage markers
+
+# markers_to_test expects logical vector
+sel_markers <- rownames(sce_tmp) %in% type_markers(sce_tmp) # all lineage markers; 
+
+cluster_name <- "meta6"
+DS <- diffcyt(sce_tmp,
+              clustering_to_use = cluster_name,
+              analysis_type = "DS",
+              method_DS = "diffcyt-DS-limma",
+              design = design,
+              contrast = contrast,
+              markers_to_test = sel_markers,
+              verbose = FALSE)
+
+res_DS <- as.data.frame(rowData(DS$res))
+
+file_name <- paste(sel_panel, cluster_name, "DS.csv", sep = "_")
+write.table(res_DS, file.path(res_dir, file_name), row.names = FALSE, quote = FALSE)
+
+
+
+
+# FIND COMMON DE MARKERS -------------------------------------------------------
+cluster_id <- 6
+pval_ds_thres <- 0.05
+pval_scran_thres <- 0.05
+
+de_markers <- identify_de_markers(res_DS,
+                                  res_scran,
+                                  c = cluster_id,
+                                  pval_ds_thres,
+                                  pval_scran_thres)
+
+prefix <- c("C6")
+file_name <- paste(sel_panel, prefix, cluster_name, "DE_markers.txt", sep = "_")
+write.table(de_markers, file = file.path(res_dir, file_name), row.names = FALSE, col.names = TRUE, quote = FALSE)
+
+
+
+
+
 
 
 
