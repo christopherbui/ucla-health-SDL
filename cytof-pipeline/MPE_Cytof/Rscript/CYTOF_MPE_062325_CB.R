@@ -1064,7 +1064,7 @@ cluster_name <- c("meta6")
 clusters_to_do <- c(6)
 test_type <- "wilcox"
 
-all_info <- scran_analysis(sce_tmp, cluster_name, clusters_to_do, test_type, "median")
+all_info <- scran_analysis_tissue(sce_tmp, cluster_name, clusters_to_do, test_type, "median")
 
 file_name <- paste0(sel_panel, "_", cluster_name, "_scran_", test_type, ".csv")
 write.table(all_info, file.path(res_dir, file_name), row.names = FALSE, quote = FALSE)

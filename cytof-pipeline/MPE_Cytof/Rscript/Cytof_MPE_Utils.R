@@ -170,11 +170,11 @@ scran_analysis_OLD <- function(sce, cluster_name, test_type = "wilcox", average 
 
 
 
-scran_analysis <- function(sce,
-                           cluster_name,
-                           clusters_to_do = "all",
-                           test_type = "wilcox",
-                           average = "median") {
+scran_analysis_tissue <- function(sce,
+                                  cluster_name,
+                                  clusters_to_do = "all",
+                                  test_type = "wilcox",
+                                  average = "median") {
   
   # all cluster in metacluster group
   all_clusters <- sort(unique(colData(sce)[[cluster_name]]))
@@ -251,13 +251,13 @@ scran_analysis <- function(sce,
 
 identify_de_markers <- function(df_ds,
                                 df_scran,
-                                c,
+                                clust_id,
                                 pval_ds_thres = 0.05,
                                 pval_scran_thres = 0.05) {
   
   # Step 1. filter for p value, add upregulated column
   ds_filtered <- df_ds %>%
-    dplyr::filter(cluster_id == c, p_val < pval_ds_thres) %>%
+    dplyr::filter(cluster_id == clust_id, p_adj < pval_ds_thres) %>%
     mutate(
       ds_upregulated_in = case_when(
         logFC > 0 ~ "PBMC",
@@ -266,7 +266,7 @@ identify_de_markers <- function(df_ds,
       )
     )
   scran_filtered <- df_scran %>%
-    dplyr::filter(cluster == c, p.value < pval_scran_thres) %>%
+    dplyr::filter(cluster == clust_id, p.value < pval_scran_thres) %>%
     mutate(
       scran_upregulated_in = case_when(
         tissue_type == "PBMC" & self.average > other.average ~ "PBMC",
@@ -275,7 +275,6 @@ identify_de_markers <- function(df_ds,
       )
     )
   
-  
  # Step 2. Identify common markers
   joined <- inner_join(
     ds_filtered,
@@ -283,12 +282,11 @@ identify_de_markers <- function(df_ds,
     by = c("marker_id" = "marker")
   )
   
-  
   # Step 3. common regulation direction
   common <- joined %>%
     dplyr::filter(ds_upregulated_in == scran_upregulated_in) %>%
     transmute(
-      cluster_id = c,
+      cluster_id = clust_id,
       marker = marker_id,
       upregulated_in = ds_upregulated_in,
       DE_source = "common",
@@ -302,7 +300,7 @@ identify_de_markers <- function(df_ds,
   conflict <- joined %>%
     dplyr::filter(ds_upregulated_in != scran_upregulated_in) %>%
     transmute(
-      cluster_id = c,
+      cluster_id = clust_id,
       marker = marker_id,
       upregulated_in = "conflict",
       DE_source = "conflict",
@@ -316,7 +314,7 @@ identify_de_markers <- function(df_ds,
   ds_only <- ds_filtered %>%
     dplyr::filter(!(marker_id %in% scran_filtered$marker)) %>%
     transmute(
-      cluster_id = c,
+      cluster_id = clust_id,
       marker = marker_id,
       upregulated_in = ds_upregulated_in,
       DE_source = "DS_only",
@@ -330,7 +328,7 @@ identify_de_markers <- function(df_ds,
   scran_only <- scran_filtered %>%
     dplyr::filter(!(marker %in% ds_filtered$marker_id)) %>%
     transmute(
-      cluster_id = c,
+      cluster_id = clust_id,
       marker,
       upregulated_in = scran_upregulated_in,
       DE_source = "scran_only",
