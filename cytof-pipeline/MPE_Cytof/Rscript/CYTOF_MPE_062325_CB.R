@@ -826,8 +826,8 @@ dev.off()
 
 # ------------------------------------------------------------------------------
 # sel_panel <- "TBNK"
-sel_panel <- "Myeloid"
-# sel_panel <- "Cytokines"
+# sel_panel <- "Myeloid"
+sel_panel <- "Cytokines"
 
 # Select Markers To Use
 
@@ -846,7 +846,7 @@ sel_markers <- type_markers
 
 # PARTITION SCE OBJECT FOR SELECTED MARKERS
 # sce_full <- sce[sel_markers, ]
-sce_sub <- sce[sel_markers, ]
+# sce_sub <- sce[sel_markers, ]
 
 # set cluster info directory
 cluster_info_dir <- file.path(res_dir, "Cluster_Info")
@@ -859,7 +859,7 @@ maxk <- 20
 
 # ASSIGN SCE OBJECT TO 'sce_tmp' FOR PROCESSING
 # sce_tmp <- sce_full
-sce_tmp <- sce_sub
+# sce_tmp <- sce_sub
 
 sel_markers <- type_markers(sce_tmp)
 
@@ -918,7 +918,7 @@ ggsave(filename = file.path(res_dir, file_name), plot = elbow_PLOT, height = 8, 
 
 
 # UMAP -------------------------------------------------------------------------
-pc_to_use <- 4  # adjust as needed
+pc_to_use <- 9  # adjust as needed
 
 # parent UMAP directory
 umap_dir <- file.path(res_dir, "UMAP")
@@ -935,7 +935,7 @@ sce_tmp <- runDR(sce_tmp, "UMAP", cells = n_cells, features = sel_markers, pca =
 
 # specify cluster for plotting
 # cluster_name <- c("meta20")
-cluster_name <- c("meta5")
+cluster_name <- c("meta6")
 
 umap_PLOT <- plotDR(sce_tmp, "UMAP", color_by = cluster_name)
 file_name <- paste0("UMAP_", cluster_name, ".png")
@@ -969,7 +969,6 @@ label_for_dotplot <- paste(ifelse(scale_option, "scaled", "non-scaled"), sel_agg
 # set output directory; i.e. scaling or no scaling
 dp_output_dir <- ifelse(scale_option, dotplot_scaled_dir, dotplot_no_scaled_dir)
 
-
 tmp_ftab <- dotplotTables(sce_tmp,
                           cluster_name = sel_metaK,
                           assay = "exprs",
@@ -978,6 +977,19 @@ tmp_ftab <- dotplotTables(sce_tmp,
                           q = 0.01)
 
 tmp_fig <- dotplotFig(tmp_ftab$expr_long, lab = label_for_dotplot)
+
+
+
+tmp_ftab_fl <- dotplotTables(sce_fl,
+                          cluster_name = sel_metaK,
+                          assay = "exprs",
+                          fun = sel_aggregate,
+                          scale = scale_option,
+                          q = 0.01)
+
+
+
+
 
 
 # save dotplot matrices
@@ -1004,14 +1016,14 @@ sce_tmp <- readRDS(file.path(rds_path, "sce_subset_lineage.rds"))
 
 
 # list of cluster codes
-metaK_id  <- colnames(sce_tmp2@metadata$cluster_codes)[3:20]
+metaK_id  <- colnames(sce_tmp_dp@metadata$cluster_codes)[3:20]
 
 # metacluster id for each cell
-tmp_meta_clust <- lapply(as.list(metaK_id), function(id) CATALYST::cluster_ids(sce_tmp2, id))
+tmp_meta_clust <- lapply(as.list(metaK_id), function(id) CATALYST::cluster_ids(sce_tmp_dp, id))
 
 names(tmp_meta_clust) <- metaK_id
 
-mat_expr <- t(as.matrix(assay(sce_tmp2,  "exprs")))   #***DO NOT USE assay="exprs" since it gets raw data
+mat_expr <- t(as.matrix(assay(sce_tmp_dp,  "exprs")))   #***DO NOT USE assay="exprs" since it gets raw data
 
 sil_expr <- vapply(tmp_meta_clust, function(x) mean(bluster::approxSilhouette(mat_expr, x)$width), 0)
 
@@ -1048,27 +1060,100 @@ ggsave(filename = file.path(res_dir, "Silhouette_Plot.png"), plot = sil_PLOT, wi
 
 
 # ------------------------------------------------------------------------------
-# DIFFERENTIAL ANALYSIS ON FULL LINEAGE
+# DIFFERENTIAL ANALYSIS; USE ALL MARKERS
 #
 # NOTE:
 #   - Trying to see if there's difference of marker expression between
 #     tissue types among tier1 clustering on full lineage
 # ------------------------------------------------------------------------------
+sce_main <- readRDS("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/Cytokines/sce_main.rds")
+sce_fl <- readRDS("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/Cytokines/sce_full_lineage.rds")
+
+sce_fl$meta6 <- cluster_ids(sce_fl, "meta6")
+
+sce_main$cluster_id <- sce_fl$cluster_id
+sce_main$meta6 <- sce_fl$meta6
+metadata(sce_main)$cluster_codes <- metadata(sce_fl)$cluster_codes  # need to add cluster_codes metadata for diffcyt
+
+sce_tmp <- sce_main
 
 # !!! REMOVE REF
+# sce_tmp <- sce_tmp[, colData(sce_tmp)$patient_id != "Ref"]
 sce_tmp <- filterSCE(sce_tmp, patient_id != "Ref")
+
+# filter just for 1 cluster; C6 from meta6 CYTOKINE for now
+# sce_tmp <- sce_tmp[, colData(sce_tmp)$meta6 == 6]
 
 
 # SCRAN - TISSUE
 cluster_name <- c("meta6")
-clusters_to_do <- c(6)
 test_type <- "wilcox"
+# all_info <- scran_analysis_tissue(sce_tmp, cluster_name, clusters_to_do = "all", test_type, "median")
 
-all_info <- scran_analysis_tissue(sce_tmp, cluster_name, clusters_to_do, test_type, "median")
+# get clusters to segment sce for scran
+all_clusters <- sort(unique(colData(sce_tmp)[[cluster_name]]))
 
-file_name <- paste0(sel_panel, "_", cluster_name, "_scran_", test_type, ".csv")
-write.table(all_info, file.path(res_dir, file_name), row.names = FALSE, quote = FALSE)
+# define clusters of interest
+clusters <- all_clusters
 
+res_by_cluster <- list()  # hold all tissue results for each cluster
+for (c in clusters) {
+  message("Processing Cluster: ", c)
+  
+  # subset by cluster
+  sce_c <- sce_tmp[, colData(sce_tmp)[[cluster_name]] == c]
+  
+  tmp_de_pv <- scran::findMarkers(sce_c,
+                                  groups = colData(sce_c)$tissue_type,
+                                  assay.type = "exprs",
+                                  test.type = test_type,
+                                  pval.type = "all",
+                                  min.prop = 0.25,
+                                  direction = "up")
+  
+  sum_out <- scran::summaryMarkerStats(sce_c,
+                                       groups = colData(sce_c)$tissue_type,
+                                       assay.type = "exprs",
+                                       average = "median")
+  
+  # get PBMC, MPE results
+  tissue_list <- list()
+  for (tissue in c("PBMC", "MPE")) {
+    if (tissue %in% names(tmp_de_pv)) {
+      # extract and label marker names
+      de_df <- as.data.frame(tmp_de_pv[[tissue]])
+      de_df$marker <- rownames(de_df)
+      
+      sum_df <- as.data.frame(sum_out[[tissue]])
+      sum_df$marker <- rownames(sum_df)
+      
+      # inner join on marker
+      merged <- inner_join(sum_df, de_df, by = "marker")
+      
+      # add cluster id & tissue type info
+      merged$cluster <- c
+      merged$tissue_type <- tissue
+      
+      tissue_list[[tissue]] <- merged
+    }
+  }
+  # concatenate PBMC and MPE results for this cluster
+  tissue_combined <- bind_rows(tissue_list)
+  
+  # add all results for this cluster to cluster list
+  res_by_cluster[[c]] <- tissue_combined
+}
+
+# concatenate all cluster's tissue info
+all_info <- bind_rows(res_by_cluster)
+# reorder columns
+all_info <- all_info[, c("marker", "cluster", "tissue_type", setdiff(colnames(all_info), c("marker", "cluster", "tissue_type")))]
+
+# select & rename columns
+
+
+file_name <- paste0(sel_panel, "_", cluster_name, "_scran_", test_type, "_0.txt")
+write.table(all_info, file.path(res_dir, file_name), sep = "\t", row.names = FALSE, quote = FALSE)
 
 
 
@@ -1076,13 +1161,19 @@ write.table(all_info, file.path(res_dir, file_name), row.names = FALSE, quote = 
 # DIFFCYT ----------------------------------------------------------------------
 
 condition <- "tissue_type"
-design <- createDesignMatrix(ei(sce_tmp), cols_design = condition)
+design <- createDesignMatrix(ei(sce_tmp_0), cols_design = condition)
 contrast <- createContrast(c(0, 1))
+
+
+
+# FILTER CELLS FOR SPECIFIC CLUSTER; DON'T WANT OTHER CLUSTERS TO INFLUENCE
+sce_tmp <- sce_tmp[, colData(sce_tmp)$meta6 == 6]
+
 
 
 # differential abundance (DA) of clusters
 cluster_name <- "meta6"
-res_DA <- diffcyt(sce_tmp,
+res_DA <- diffcyt(sce_tmp_0,
                   clustering_to_use = cluster_name,
                   analysis_type = "DA",
                   method_DA = "diffcyt-DA-edgeR",
@@ -1094,10 +1185,10 @@ res_DA <- diffcyt(sce_tmp,
 # "DS" expects functional markers by default; need to specify lineage markers
 
 # markers_to_test expects logical vector
-sel_markers <- rownames(sce_tmp) %in% type_markers(sce_tmp) # all lineage markers; 
+sel_markers <- rownames(sce_tmp_0) %in% rownames(sce_tmp_0) # all markers; 
 
 cluster_name <- "meta6"
-DS <- diffcyt(sce_tmp,
+DS <- diffcyt(sce_tmp_0,
               clustering_to_use = cluster_name,
               analysis_type = "DS",
               method_DS = "diffcyt-DS-limma",
@@ -1108,30 +1199,71 @@ DS <- diffcyt(sce_tmp,
 
 res_DS <- as.data.frame(rowData(DS$res))
 
-file_name <- paste(sel_panel, cluster_name, "DS.csv", sep = "_")
-write.table(res_DS, file.path(res_dir, file_name), row.names = FALSE, quote = FALSE)
+file_name <- paste(sel_panel, cluster_name, "DS_0.txt", sep = "_")
+write.table(res_DS, file.path(res_dir, file_name), sep = "\t", row.names = FALSE, quote = FALSE)
 
 
 
 
 # FIND COMMON DE MARKERS -------------------------------------------------------
-cluster_id <- 6
-pval_ds_thres <- 0.05
-pval_scran_thres <- 0.05
 
-de_markers <- identify_de_markers(res_DS,
-                                  res_scran,
-                                  c = cluster_id,
-                                  pval_ds_thres,
-                                  pval_scran_thres)
+# need to process scran results
+# 1. group by cluster-marker pairs (will have PBMC & MPE results for each pair)
+# 2. identify which row (tissue type) has lower p value
+# 3. calculate logFC for selected tissue type
+#       DS uses PBMC as reference, therefore:
+#       - PBMC: other.average - self.average
+#       - MPE:  self.average - other.average
 
-prefix <- c("C6")
-file_name <- paste(sel_panel, prefix, cluster_name, "DE_markers.txt", sep = "_")
-write.table(de_markers, file = file.path(res_dir, file_name), row.names = FALSE, col.names = TRUE, quote = FALSE)
+scran <- all_info
+
+# group by marker & cluster, get the lower p value tissue type
+sel_scran <- scran %>%
+  group_by(marker, cluster) %>%
+  dplyr::filter(p.value == min(p.value)) %>%
+  ungroup()
+
+# calculate logFC
+sel_scran <- sel_scran %>%
+  mutate(
+    logFC = case_when(
+      tissue_type == "MPE" ~ self.average - other.average,
+      tissue_type == "PBMC" ~ other.average - self.average
+    ),
+    upregulated_SCRAN = case_when(
+      logFC > 0 ~ "MPE",
+      logFC < 0 ~ "PBMC"
+    )
+  ) %>%
+  select(marker, cluster, logFC, p.value, tissue_type, upregulated_SCRAN) %>%
+  dplyr::rename(
+    logFC_SCRAN = logFC,
+    p_val_SCRAN = p.value,
+  )
 
 
+# select columns in DS
+sel_DS <- res_DS %>%
+  mutate(
+    upregulated_DS = case_when(
+      logFC > 0 ~ "MPE",
+      logFC < 0 ~ "PBMC"
+    )
+  ) %>%
+  select(cluster_id, marker_id, logFC, p_adj, upregulated_DS) %>%
+  dplyr::rename(
+    cluster = cluster_id,
+    marker = marker_id,
+    logFC_DS = logFC,
+    p_adj_DS = p_adj
+  )
 
 
+# join DS & scran
+sel_DS_scran <- inner_join(sel_DS, sel_scran, by = c("marker", "cluster"))
+
+file_name <- paste(sel_panel, cluster_name, "cluster_marker_DE_table.txt", sep = "_")
+write.table(sel_DS_scran, file.path(res_dir, file_name), sep = "\t", row.names = FALSE, quote = FALSE)
 
 
 
@@ -1229,7 +1361,7 @@ sce_tmp$meta6 <- cluster_ids(sce_tmp, "meta6")
 
 # PCA --------------------------------------------------------------------------
 pc_prop <- 0.75 #*** proportion of total features to use
-no_pcs <- floor(nrow(sce_tmp) * pc_prop)
+no_pcs <- floor(length(sel_markers) * pc_prop)
 
 sce_tmp <- runPCA(sce_tmp, exprs_values = "exprs", ncomponents = no_pcs)
 
@@ -1512,11 +1644,11 @@ res_DA <- diffcyt(sce_tmp,
 # "DS" expects functional markers by default; need to specify lineage markers
 # type_markers <- rowData(sce_tmp)$marker_class == "type"
 
-sel_markers <- rownames(sce_tmp) %in% rownames(sce_tmp) # all markers
+sel_markers <- rownames(sce_tmp_2) %in% rownames(sce_tmp_2) # all markers
 # sel_markers <- type_markers
 
 
-cluster_name <- c("meta5")
+cluster_name <- c("meta6")
 res_DS <- diffcyt(sce_tmp,
                   clustering_to_use = cluster_name,
                   analysis_type = "DS",
@@ -1548,7 +1680,7 @@ saveRDS(res_DS, file = file.path(rds_path, file_name))
 
 
 # scran - group: clusters ------------------------------------------------------
-cluster_name <- c("meta5")  # this is the metak from subclustering
+cluster_name <- c("meta6")  # this is the metak from subclustering
 tmp_de_pv <- scran::findMarkers(sce_tmp,
                                 groups=cluster_ids(sce_tmp, cluster_name),
                                 assay.type = "exprs",
