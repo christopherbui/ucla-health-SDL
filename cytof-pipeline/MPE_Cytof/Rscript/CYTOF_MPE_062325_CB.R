@@ -1229,10 +1229,6 @@ sel_scran <- sel_scran %>%
     logFC = case_when(
       tissue_type == "MPE" ~ self.average - other.average,
       tissue_type == "PBMC" ~ other.average - self.average
-    ),
-    upregulated_SCRAN = case_when(
-      logFC > 0 ~ "MPE",
-      logFC < 0 ~ "PBMC"
     )
   ) %>%
   select(marker, cluster, logFC, p.value, tissue_type, upregulated_SCRAN) %>%
@@ -2108,8 +2104,211 @@ for (i in sel_panel_list[1]) {
 
 
 
+# ------------------------------------------------------------------------------
+# DIFFERENTIAL ANALYSIS - WITHIN SUBCLUSTERS
+#
+# Tier1 cluster group & chosen meta for DE
+#
+# TBNK
+# Myeloid
+#
+# Cytokines
+#   (C1, C2, C3) Myeloid: meta8
+#   C4: meta6
+#   C5: meta5
+#   C6: meta7
+# 
+#-------------------------------------------------------------------------------
+sel_panel <- "Cytokines"
+
+rds_subclust_dir <- c("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/Cytokines/Results_Subcluster/RDS_Subcluster")
+
+sce_main <- readRDS("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/Cytokines/sce_main.rds")
+sce_fl <- readRDS("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/Cytokines/sce_full_lineage.rds")
+
+# transfer metadata from fsom tier1 to sce_main (all markers)
+sce_main$meta6_full_lin <- sce_fl$meta6   # **** adjust as needed
+
+tmp_4type <- is.element(rownames(sce_main), rownames(sce_fl))
+rowData(sce_main)$used_for_clustering <- FALSE
+rowData(sce_main)$used_for_clustering[which(tmp_4type == TRUE)] <- TRUE
+
+# Cytokines - tier1 cluster sce
+# sce_c4 <- readRDS(file.path(rds_subclust_dir, "C4_sce_subclust_full_lineage.rds"))
+# sce_c5 <- readRDS(file.path(rds_subclust_dir, "C5_sce_subclust_full_lineage.rds"))
+# sce_c6 <- readRDS(file.path(rds_subclust_dir, "C6_sce_subclust_full_lineage.rds"))
+sce_myl <- readRDS(file.path(rds_subclust_dir, "Myeloid_sce_subclust_full_lineage.rds"))
+
+# filter for selected cluster
+subclust <- c(1,2,3)  # tier1 cluster; adjust as needed; should match tier1 cluster sce
+sce_main_tmp <- filterSCE(sce_main, meta6_full_lin %in% subclust)
+
+# sce_sub
+sce_sub <- sce_myl  # **** adjust as needed
+
+sce_main_tmp$cluster_id <- sce_sub$cluster_id
+sce_main_tmp@metadata <- metadata(sce_sub)
+
+sce_main_tmp$meta8 <- cluster_ids(sce_main_tmp, "meta8")  # **** adjust as needed
+
+# set PBMC as reference
+old_level <- levels(colData(sce_main_tmp)$tissue_type)
+colData(sce_main_tmp)$tissue_type <- factor(colData(sce_main_tmp)$tissue_type, levels = c("PBMC", "MPE"))
+new_level <- levels(colData(sce_main_tmp)$tissue_type)
+
+sce_tmp_all <- sce_main_tmp
+
+# filter out refs
+sce_tmp <- filterSCE(sce_tmp_all, patient_id != "Ref")
 
 
+# DIFFCYT - DS (TISSUE) --------------------------------------------------------
+tmp_sample_no <- table(ei(sce_tmp)$tissue_type)
+th_min_sample <- floor(min(tmp_sample_no)*.8)   #**80% of the small group
+
+condition <- "tissue_type"
+tmp_ei <- ei(sce_tmp)
+
+sel_ds_method <- c("diffcyt-DS-limma")
+design <- createDesignMatrix(tmp_ei, cols_design = condition)
+contrast <- createContrast(c(0, 1))
+
+# all markers
+sel_markers <- rownames(sce_tmp) %in% rownames(sce_tmp)
+
+cluster_name <- c("meta8")  # **** adjust as needed
+res_DS <- diffcyt(sce_tmp,
+                  clustering_to_use = cluster_name,
+                  analysis_type = "DS",
+                  method_DS = sel_ds_method,
+                  design = design,
+                  contrast = contrast,
+                  markers_to_test = sel_markers,
+                  min_samples = th_min_sample,
+                  verbose = FALSE,
+                  transform = FALSE)
+
+DS <- as.data.frame(rowData(res_DS$res))
+
+
+# SCRAN (TISSUE) ---------------------------------------------------------------
+test_type <- c("wilcox")
+
+# get clusters to segment sce for scran
+all_clusters <- sort(unique(colData(sce_tmp)[[cluster_name]]))
+
+# define clusters of interest
+clusters <- all_clusters
+
+res_by_cluster <- list()  # hold all tissue results for each cluster
+for (c in clusters) {
+  message("Processing Cluster: ", c)
+  
+  # subset by cluster
+  sce_c <- sce_tmp[, colData(sce_tmp)[[cluster_name]] == c]
+  
+  tmp_de_pv <- scran::findMarkers(sce_c,
+                                  groups = colData(sce_c)$tissue_type,
+                                  assay.type = "exprs",
+                                  test.type = test_type,
+                                  pval.type = "all",
+                                  min.prop = 0.25,
+                                  direction = "up")
+  
+  sum_out <- scran::summaryMarkerStats(sce_c,
+                                       groups = colData(sce_c)$tissue_type,
+                                       assay.type = "exprs",
+                                       average = "median")
+  
+  # get PBMC, MPE results
+  tissue_list <- list()
+  for (tissue in c("PBMC", "MPE")) {
+    if (tissue %in% names(tmp_de_pv)) {
+      # extract and label marker names
+      de_df <- as.data.frame(tmp_de_pv[[tissue]])
+      de_df$marker <- rownames(de_df)
+      
+      sum_df <- as.data.frame(sum_out[[tissue]])
+      sum_df$marker <- rownames(sum_df)
+      
+      # inner join on marker
+      merged <- inner_join(sum_df, de_df, by = "marker")
+      
+      # add cluster id & tissue type info
+      merged$cluster <- c
+      merged$tissue_type <- tissue
+      
+      tissue_list[[tissue]] <- merged
+    }
+  }
+  # concatenate PBMC and MPE results for this cluster
+  tissue_combined <- bind_rows(tissue_list)
+  
+  # add all results for this cluster to cluster list
+  res_by_cluster[[c]] <- tissue_combined
+}
+
+# concatenate all cluster's tissue info
+all_info <- bind_rows(res_by_cluster)
+# reorder columns
+all_info <- all_info[, c("marker", "cluster", "tissue_type", setdiff(colnames(all_info), c("marker", "cluster", "tissue_type")))]
+
+
+# COMBINE DS & SCRAN -----------------------------------------------------------
+
+# DS
+# select columns in DS
+sel_DS <- DS %>%
+  select(cluster_id, marker_id, logFC, p_val, p_adj) %>%
+  dplyr::rename(
+    cluster = cluster_id,
+    marker = marker_id,
+    logFC_DS = logFC,
+    p_val_DS = p_val,
+    p_adj_DS = p_adj
+  )
+
+# SCRAN
+scran <- all_info
+# group by marker & cluster, get the lower p value tissue type
+sel_scran <- scran %>%
+  group_by(marker, cluster) %>%
+  dplyr::filter(p.value == min(p.value)) %>%
+  ungroup()
+
+# calculate logFC
+sel_scran <- sel_scran %>%
+  mutate(
+    logFC = case_when(
+      tissue_type == "MPE" ~ self.average - other.average,
+      tissue_type == "PBMC" ~ other.average - self.average
+    )
+  ) %>%
+  select(marker, cluster, logFC, p.value, FDR) %>%
+  dplyr::rename(
+    logFC_SCRAN = logFC,
+    p_val_SCRAN = p.value,
+  )
+
+
+# join DS & scran
+sel_DS_scran <- full_join(sel_DS, sel_scran, by = c("marker", "cluster"))
+# sel_DS_scran2 <- inner_join(sel_DS, sel_scran, by = c("marker", "cluster"))
+
+subclust_label <- c("Myeloid")
+file_name <- paste(sel_panel, subclust_label, cluster_name, "DE_table.txt", sep = "_")
+write.table(sel_DS_scran, file.path(res_dir, file_name), sep = "\t", row.names = FALSE, quote = FALSE)
+
+
+# save rds
+file_name <- paste(sel_panel, subclust_label, cluster_name, "DS.rds", sep = "_")
+saveRDS(res_DS, file = file.path(output_dir, file_name))
+
+file_name <- paste(sel_panel, subclust_label, cluster_name, "scran_pv.rds", sep = "_")
+saveRDS(tmp_de_pv, file = file.path(output_dir, file_name))
+
+file_name <- paste(sel_panel, subclust_label, cluster_name, "scran_marker_sum.rds", sep = "_")
+saveRDS(sum_out, file = file.path(output_dir, file_name))
 
 
 
