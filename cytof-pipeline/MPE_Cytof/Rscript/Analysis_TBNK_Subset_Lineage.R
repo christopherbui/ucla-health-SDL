@@ -1,17 +1,15 @@
 sel_panel <- "TBNK"
-# sel_panel <- "Myeloid"
-# sel_panel <- "Cytokines"
 
 rds_subclust_dir <- paste0("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/", sel_panel, "/Results_Subcluster/RDS_Subcluster")
 
 rds_files <- list.files(rds_subclust_dir)
 
-# sce_c1 <- readRDS(file.path(rds_subclust_dir, rds_files[1]))
-# sce_c2 <- readRDS(file.path(rds_subclust_dir, rds_files[2]))
+sce_c1 <- readRDS(file.path(rds_subclust_dir, rds_files[1]))
+sce_c2 <- readRDS(file.path(rds_subclust_dir, rds_files[2]))
 # sce_c3c4 <- readRDS(file.path(rds_subclust_dir, rds_files[3]))
 # sce_c5c9 <- readRDS(file.path(rds_subclust_dir, rds_files[4]))
 # sce_c6c7 <- readRDS(file.path(rds_subclust_dir, rds_files[5]))
-sce_c8 <- readRDS(file.path(rds_subclust_dir, rds_files[6]))
+# sce_c8 <- readRDS(file.path(rds_subclust_dir, rds_files[6]))
 
 output_dir <- paste0("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/", sel_panel, "/Results_Subcluster")
 
@@ -20,9 +18,8 @@ prefix <- "C1"
 
 # DOTPLOTS
 m3_dp <- dotplotTables(sce_c1, "meta3", assay = "exprs", fun = "median", scale = FALSE, q = 0.01)
-m7_dp <- dotplotTables(sce_c1, "meta7", assay = "exprs", fun = "median", scale = FALSE, q = 0.01)
-m11_dp <- dotplotTables(sce_c1, "meta11", assay = "exprs", fun = "median", scale = FALSE, q = 0.01)
 m5_dp <- dotplotTables(sce_c1, "meta5", assay = "exprs", fun = "median", scale = FALSE, q = 0.01)
+m9_dp <- dotplotTables(sce_c1, "meta9", assay = "exprs", fun = "median", scale = FALSE, q = 0.01)
 
 sel_aggregate <- c("median")
 scale_option <- FALSE
@@ -33,46 +30,26 @@ tmp_fig <- dotplotFig(m3_dp$expr_long, lab = label_for_dotplot)
 file_name <- paste(sel_panel, prefix, "meta3", "dotplot", sel_aggregate, ifelse(scale_option, "SCALED.png", "NON_SCALED.png"), sep = "_")
 ggsave(filename = file.path(output_dir, file_name), plot = tmp_fig, width = 10, height = 8)
 
-# meta7
-tmp_fig <- dotplotFig(m7_dp$expr_long, lab = label_for_dotplot)
-file_name <- paste(sel_panel, prefix, "meta7", "dotplot", sel_aggregate, ifelse(scale_option, "SCALED.png", "NON_SCALED.png"), sep = "_")
-ggsave(filename = file.path(output_dir, file_name), plot = tmp_fig, width = 10, height = 8)
-
-# meta11
-tmp_fig <- dotplotFig(m11_dp$expr_long, lab = label_for_dotplot)
-file_name <- paste(sel_panel, prefix, "meta11", "dotplot", sel_aggregate, ifelse(scale_option, "SCALED.png", "NON_SCALED.png"), sep = "_")
-ggsave(filename = file.path(output_dir, file_name), plot = tmp_fig, width = 10, height = 8)
-
 # meta5
 tmp_fig <- dotplotFig(m5_dp$expr_long, lab = label_for_dotplot)
 file_name <- paste(sel_panel, prefix, "meta5", "dotplot", sel_aggregate, ifelse(scale_option, "SCALED.png", "NON_SCALED.png"), sep = "_")
 ggsave(filename = file.path(output_dir, file_name), plot = tmp_fig, width = 10, height = 8)
 
+# meta9
+tmp_fig <- dotplotFig(m9_dp$expr_long, lab = label_for_dotplot)
+file_name <- paste(sel_panel, prefix, "meta9", "dotplot", sel_aggregate, ifelse(scale_option, "SCALED.png", "NON_SCALED.png"), sep = "_")
+ggsave(filename = file.path(output_dir, file_name), plot = tmp_fig, width = 10, height = 8)
+
 
 # CORR
 corr_m3 <- cor(m3_dp$expr_wide)
-corr_m7 <- cor(m7_dp$expr_wide)
-corr_m11 <- cor(m11_dp$expr_wide)
 corr_m5 <- cor(m5_dp$expr_wide)
+corr_m9 <- cor(m9_dp$expr_wide)
 
 pheatmap(corr_m3,
          cluster_rows = TRUE,
          cluster_cols = TRUE,
          main = "Corr between meta3 clusters",
-         fontsize_row = 10,
-         fontsize_col = 10)
-
-pheatmap(corr_m7,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         main = "Corr between meta7 clusters",
-         fontsize_row = 10,
-         fontsize_col = 10)
-
-pheatmap(corr_m11,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         main = "Corr between meta11 clusters",
          fontsize_row = 10,
          fontsize_col = 10)
 
@@ -83,42 +60,13 @@ pheatmap(corr_m5,
          fontsize_row = 10,
          fontsize_col = 10)
 
-
-# meta3 & meta7
-corr_mat_m3_m7 <- cor(m3_dp$expr_wide, m7_dp$expr_wide)
-pheatmap(corr_mat_m3_m7,
+pheatmap(corr_m9,
          cluster_rows = TRUE,
          cluster_cols = TRUE,
-         main = "Correlation between meta3 and meta7 clusters",
+         main = "Corr between meta9 clusters",
          fontsize_row = 10,
          fontsize_col = 10)
 
-# meta3 & meta11
-corr_mat_m3_m11 <- cor(m3_dp$expr_wide, m11_dp$expr_wide)
-pheatmap(corr_mat_m3_m11,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         main = "Correlation between meta3 and meta11 clusters",
-         fontsize_row = 10,
-         fontsize_col = 10)
-
-# meta7 & meta11
-corr_mat_m7_m11 <- cor(m7_dp$expr_wide, m11_dp$expr_wide)
-pheatmap(corr_mat_m7_m11,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         main = "Correlation between meta7 and meta11 clusters",
-         fontsize_row = 10,
-         fontsize_col = 10)
-
-# meta5 & meta7
-corr_mat_m5_m7 <- cor(m5_dp$expr_wide, m7_dp$expr_wide)
-pheatmap(corr_mat_m5_m7,
-         cluster_rows = TRUE,
-         cluster_cols = TRUE,
-         main = "Correlation between meta5 and meta7 clusters",
-         fontsize_row = 10,
-         fontsize_col = 10)
 
 # meta3 & meta5
 corr_mat_m3_m5 <- cor(m3_dp$expr_wide, m5_dp$expr_wide)
@@ -129,19 +77,33 @@ pheatmap(corr_mat_m3_m5,
          fontsize_row = 10,
          fontsize_col = 10)
 
+# meta3 & meta9
+corr_mat_m3_m9 <- cor(m3_dp$expr_wide, m9_dp$expr_wide)
+pheatmap(corr_mat_m3_m9,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         main = "Correlation between meta3 and meta9 clusters",
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+# meta5 & meta9
+corr_mat_m5_m9 <- cor(m5_dp$expr_wide, m9_dp$expr_wide)
+pheatmap(corr_mat_m5_m9,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         main = "Correlation between meta5 and meta9 clusters",
+         fontsize_row = 10,
+         fontsize_col = 10)
 
 # ABUNDANCE DOTPLOT
 # meta3
 CATALYST::plotAbundances(sce_c1, k = "meta3", by = "cluster_id", group_by = "BATCH") +
   ggtitle("Abundance by Cluster & Batch")
-# meta7
-CATALYST::plotAbundances(sce_c1, k = "meta7", by = "cluster_id", group_by = "BATCH") +
-  ggtitle("Abundance by Cluster & Batch")
-# meta11
-CATALYST::plotAbundances(sce_c1, k = "meta11", by = "cluster_id", group_by = "BATCH") +
-  ggtitle("Abundance by Cluster & Batch")
 # meta5
 CATALYST::plotAbundances(sce_c1, k = "meta5", by = "cluster_id", group_by = "BATCH") +
+  ggtitle("Abundance by Cluster & Batch")
+# meta9
+CATALYST::plotAbundances(sce_c1, k = "meta9", by = "cluster_id", group_by = "BATCH") +
   ggtitle("Abundance by Cluster & Batch")
 
 
@@ -153,18 +115,13 @@ clust_tbl_pbmc <- table(cluster_ids(sce_c1_pbmc, "meta3"), colData(sce_c1_pbmc)$
 clust_prop_tbl_pbmc <- prop.table(clust_tbl_pbmc, 2)
 pheatmap(clust_prop_tbl_pbmc, cluster_rows = FALSE, cluster_cols = TRUE, main = "PBMC Samples Cluster Proportions")
 
-# meta7
-clust_tbl_pbmc <- table(cluster_ids(sce_c1_pbmc, "meta7"), colData(sce_c1_pbmc)$sample_id)
-clust_prop_tbl_pbmc <- prop.table(clust_tbl_pbmc, 2)
-pheatmap(clust_prop_tbl_pbmc, cluster_rows = FALSE, cluster_cols = TRUE, main = "PBMC Samples Cluster Proportions")
-
-# meta11
-clust_tbl_pbmc <- table(cluster_ids(sce_c1_pbmc, "meta11"), colData(sce_c1_pbmc)$sample_id)
-clust_prop_tbl_pbmc <- prop.table(clust_tbl_pbmc, 2)
-pheatmap(clust_prop_tbl_pbmc, cluster_rows = FALSE, cluster_cols = TRUE, main = "PBMC Samples Cluster Proportions")
-
-# meta11
+# meta5
 clust_tbl_pbmc <- table(cluster_ids(sce_c1_pbmc, "meta5"), colData(sce_c1_pbmc)$sample_id)
+clust_prop_tbl_pbmc <- prop.table(clust_tbl_pbmc, 2)
+pheatmap(clust_prop_tbl_pbmc, cluster_rows = FALSE, cluster_cols = TRUE, main = "PBMC Samples Cluster Proportions")
+
+# meta9
+clust_tbl_pbmc <- table(cluster_ids(sce_c1_pbmc, "meta9"), colData(sce_c1_pbmc)$sample_id)
 clust_prop_tbl_pbmc <- prop.table(clust_tbl_pbmc, 2)
 pheatmap(clust_prop_tbl_pbmc, cluster_rows = FALSE, cluster_cols = TRUE, main = "PBMC Samples Cluster Proportions")
 
@@ -368,6 +325,15 @@ pheatmap(corr_mat_m3_m4,
          cluster_rows = TRUE,
          cluster_cols = TRUE,
          main = "Correlation between meta3 and meta4 clusters",
+         fontsize_row = 10,
+         fontsize_col = 10)
+
+# meta4 & meta6
+corr_mat_m4_m6 <- cor(m4_dp$expr_wide, m6_dp$expr_wide)
+pheatmap(corr_mat_m4_m6,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         main = "Correlation between meta4 and meta6 clusters",
          fontsize_row = 10,
          fontsize_col = 10)
 

@@ -1016,14 +1016,14 @@ sce_tmp <- readRDS(file.path(rds_path, "sce_subset_lineage.rds"))
 
 
 # list of cluster codes
-metaK_id  <- colnames(sce_tmp_dp@metadata$cluster_codes)[3:20]
+metaK_id  <- colnames(sce_tmp@metadata$cluster_codes)[3:20]
 
 # metacluster id for each cell
-tmp_meta_clust <- lapply(as.list(metaK_id), function(id) CATALYST::cluster_ids(sce_tmp_dp, id))
+tmp_meta_clust <- lapply(as.list(metaK_id), function(id) CATALYST::cluster_ids(sce_tmp, id))
 
 names(tmp_meta_clust) <- metaK_id
 
-mat_expr <- t(as.matrix(assay(sce_tmp_dp,  "exprs")))   #***DO NOT USE assay="exprs" since it gets raw data
+mat_expr <- t(as.matrix(assay(sce_tmp,  "exprs")))   #***DO NOT USE assay="exprs" since it gets raw data
 
 sil_expr <- vapply(tmp_meta_clust, function(x) mean(bluster::approxSilhouette(mat_expr, x)$width), 0)
 
@@ -1889,7 +1889,7 @@ sel_panel_list <- c("TBNK", "Myeloid", "Cytokines")
 
 rds_path <- "D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS"
 
-sel_panel <- sel_panel_list[1]
+sel_panel <- sel_panel_list[2]
 
 res_dir <- file.path(rds_path, sel_panel, "Results_Subcluster")
 if (!dir.exists(res_dir)) dir.create(res_dir)
@@ -1898,7 +1898,7 @@ rds_subclust_dir <- file.path(res_dir, "RDS_Subcluster")
 if (!dir.exists(rds_subclust_dir)) dir.create(rds_subclust_dir)
 
 
-for (i in sel_panel_list[1]) {
+for (i in sel_panel_list[2]) {
   
   sel_panel <- i
   
@@ -1935,7 +1935,7 @@ for (i in sel_panel_list[1]) {
     message(paste0(subclust_prefix, ": PCA"))
     
     pc_prop <- 1
-    no_pcs <- floor(nrow(sce_tmp) * pc_prop)
+    no_pcs <- floor(nrow(sce_tmp) * pc_prop) - 1
     
     sce_tmp <- runPCA(sce_tmp, exprs_values = "exprs", ncomponents = no_pcs)
     
@@ -1983,7 +1983,7 @@ sel_panel_list <- c("TBNK", "Myeloid", "Cytokines")
 
 rds_path <- "D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS"
 
-sel_panel <- sel_panel_list[1]
+sel_panel <- sel_panel_list[2]
 
 res_dir <- file.path(rds_path, sel_panel, "Results_Subcluster")
 if (!dir.exists(res_dir)) dir.create(res_dir)
@@ -2007,17 +2007,23 @@ after_fsom_rds <- list.files(rds_subclust_dir)
 
 # TBNK SUBSET LINEAGE
 # pc_list <- list(
+#   C1 = 7,
 #   C2 = 8,
 #   C3C4 = 10,
 #   C5C9 = 10,
 #   C6C7 = 4,
 #   C8 = 5
 # )
+
+# MYELOID NO EPCAM, FULL LINEAGE
 pc_list <- list(
-  C1 = 7
+  C1 = 9,
+  C2C3C4 = 6,
+  C5 = 6,
+  C6 = 8
 )
 
-for (i in sel_panel_list[1]) {
+for (i in sel_panel_list[2]) {
   
   sel_panel <- i
   
@@ -2311,6 +2317,79 @@ file_name <- paste(sel_panel, subclust_label, cluster_name, "scran_marker_sum.rd
 saveRDS(sum_out, file = file.path(output_dir, file_name))
 
 
+
+# ------------------------------------------------------------------------------
+# TBNK DE
+# 
+# C1: meta5
+# C2: meta6
+# C3,C4: meta6
+# C5,C9 : meta6
+# C6,C7: meta5
+# C8:
+# ------------------------------------------------------------------------------
+# tmp_sample_no <- table(ei(sce_tmp)$tissue_type)
+# th_min_sample <- floor(min(tmp_sample_no)*.8)   #**80% of the small group
+# 
+# condition <- "tissue_type"
+# tmp_ei <- ei(sce_tmp)
+# 
+# sel_ds_method <- c("diffcyt-DS-limma")
+# design <- createDesignMatrix(tmp_ei, cols_design = condition)
+# contrast <- createContrast(c(0, 1))
+# 
+# # all markers
+# sel_markers <- rownames(sce_tmp) %in% rownames(sce_tmp)
+# 
+# cluster_name <- c("meta8")  # **** adjust as needed
+# res_DS <- diffcyt(sce_tmp,
+#                   clustering_to_use = cluster_name,
+#                   analysis_type = "DS",
+#                   method_DS = sel_ds_method,
+#                   design = design,
+#                   contrast = contrast,
+#                   markers_to_test = sel_markers,
+#                   min_samples = th_min_sample,
+#                   verbose = FALSE,
+#                   transform = FALSE)
+# 
+# DS <- as.data.frame(rowData(res_DS$res))
+
+# select SCE
+sce_tmp <- sce_c1
+
+# set PBMC as reference
+colData(sce_tmp)$tissue_type <- factor(colData(sce_tmp)$tissue_type, levels = c("PBMC", "MPE"))
+tmp_metadata <- ei(sce_tmp)
+
+# OPTION 1: TISSUE TYPE ONLY
+design <- createDesignMatrix(tmp_metadata, cols_design = c("tissue_type"))
+contrast <- createContrast(c(0, 1))
+res_DS_1 <- diffcyt(sce_tmp,
+                    clustering_to_use = "meta6",
+                    analysis_type = "DS",
+                    method_DS = "diffcyt-DS-limma",
+                    design = design,
+                    contrast = contrast,
+                    verbose = FALSE,
+                    transform = FALSE)
+
+
+
+# Set batch 2 & 3 as reference
+tmp_metadata$BATCH <- factor(tmp_metadata$BATCH, 
+                             levels = c("2", "3", "1", "4", "5", "6", "7"))
+
+design <- createDesignMatrix(tmp_metadata, cols_design = c("tissue_type", "BATCH"))
+contrast <- createContrast(c(0, 1, rep(0, 6)))  # test tissue_type only
+
+res_DS_opt2 <- diffcyt(sub_sce_tmp1,
+                       clustering_to_use = "meta6",
+                       analysis_type = "DS",
+                       method_DS = "diffcyt-DS-limma",
+                       design = design,
+                       contrast = contrast,
+                       verbose = FALSE)
 
 
 
