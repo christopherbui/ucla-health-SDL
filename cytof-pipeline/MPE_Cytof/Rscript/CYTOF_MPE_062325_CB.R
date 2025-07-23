@@ -1889,7 +1889,7 @@ sel_panel_list <- c("TBNK", "Myeloid", "Cytokines")
 
 rds_path <- "D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS"
 
-sel_panel <- sel_panel_list[2]
+sel_panel <- sel_panel_list[1]
 
 res_dir <- file.path(rds_path, sel_panel, "Results_Subcluster")
 if (!dir.exists(res_dir)) dir.create(res_dir)
@@ -1898,7 +1898,7 @@ rds_subclust_dir <- file.path(res_dir, "RDS_Subcluster")
 if (!dir.exists(rds_subclust_dir)) dir.create(rds_subclust_dir)
 
 
-for (i in sel_panel_list[2]) {
+for (i in sel_panel_list[1]) {
   
   sel_panel <- i
   
@@ -1906,6 +1906,7 @@ for (i in sel_panel_list[2]) {
   sce_files <- list.files(sce_to_subclust_path)
   
   for (f in sce_files) {
+    message("File: ", f)
     # READ SCE
     # subclust_prefix <- substr(sce_files[f], 1, 2)
     subclust_prefix <- sub("_.*", "", f)
@@ -1983,7 +1984,7 @@ sel_panel_list <- c("TBNK", "Myeloid", "Cytokines")
 
 rds_path <- "D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS"
 
-sel_panel <- sel_panel_list[2]
+sel_panel <- sel_panel_list[1]
 
 res_dir <- file.path(rds_path, sel_panel, "Results_Subcluster")
 if (!dir.exists(res_dir)) dir.create(res_dir)
@@ -2014,6 +2015,9 @@ after_fsom_rds <- list.files(rds_subclust_dir)
 #   C6C7 = 4,
 #   C8 = 5
 # )
+pc_list <- list(
+  C1 = 7
+)
 
 # MYELOID NO EPCAM, FULL LINEAGE
 pc_list <- list(
@@ -2023,13 +2027,14 @@ pc_list <- list(
   C6 = 8
 )
 
-for (i in sel_panel_list[2]) {
+for (i in sel_panel_list[1]) {
   
   sel_panel <- i
   
   sce_files <- after_fsom_rds
   
   for (f in seq_along(sce_files)) {
+    message("File: ", sce_files[f])
     # READ SCE
     subclust_prefix <- sub("_.*", "", sce_files[f])
     
@@ -2045,20 +2050,20 @@ for (i in sel_panel_list[2]) {
     
     # UMAP
     message(paste0(subclust_prefix, ": UMAP"))
-    
+
     pc_to_use <- pc_list[[subclust_prefix]]
-    
+
     # parent UMAP directory
     umap_dir <- file.path(res_dir, "UMAP")
     if (!dir.exists(umap_dir)) dir.create(umap_dir, recursive = TRUE)
-    
+
     # directory specifying PC used for UMAP
     umap_pc_dir <- file.path(umap_dir, paste0(subclust_prefix, "_PC_", pc_to_use))
     if (!dir.exists(umap_pc_dir)) dir.create(umap_pc_dir, recursive = TRUE)
-    
+
     n_cells <- 2e4
     sce_tmp <- runDR(sce_tmp, "UMAP", cells = n_cells, features = sel_markers, pca = pc_to_use, seed = 1234)
-    
+
     # save rds
     saveRDS(sce_tmp, file = file.path(rds_subclust_dir, paste0(subclust_prefix, "_sce_subclust_full_lineage_wUMAP.rds")))
     
@@ -2354,7 +2359,7 @@ saveRDS(sum_out, file = file.path(output_dir, file_name))
 #                   transform = FALSE)
 # 
 # DS <- as.data.frame(rowData(res_DS$res))
-
+sce_c1f <- readRDS("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/TBNK/Results_Subcluster/RDS_Subcluster/C1_sce_subclust_subset_lineage_filtered_outliers.rds")
 # select SCE
 sce_tmp <- sce_c1
 
