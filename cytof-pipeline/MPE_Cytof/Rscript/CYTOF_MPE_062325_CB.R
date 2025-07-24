@@ -1883,13 +1883,15 @@ dev.off()
 # ------------------------------------------------------------------------------
 # FULL ANALYSIS LOOP - SUBCLUSTERING
 # 
+# NOTE:
+#   - For Myeloid, EPCAM removed
 #-------------------------------------------------------------------------------
 
 sel_panel_list <- c("TBNK", "Myeloid", "Cytokines")
 
 rds_path <- "D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS"
 
-sel_panel <- sel_panel_list[1]
+sel_panel <- sel_panel_list[2]
 
 res_dir <- file.path(rds_path, sel_panel, "Results_Subcluster")
 if (!dir.exists(res_dir)) dir.create(res_dir)
@@ -1898,7 +1900,7 @@ rds_subclust_dir <- file.path(res_dir, "RDS_Subcluster")
 if (!dir.exists(rds_subclust_dir)) dir.create(rds_subclust_dir)
 
 
-for (i in sel_panel_list[1]) {
+for (i in sel_panel_list[2]) {
   
   sel_panel <- i
   
@@ -1913,13 +1915,15 @@ for (i in sel_panel_list[1]) {
     
     message("Doing ", subclust_prefix)
     
-    sce_tmp_0 <- readRDS(file.path(sce_to_subclust_path, f))
+    # sce_tmp_0 <- readRDS(file.path(sce_to_subclust_path, f))
+    sce_tmp <- readRDS(file.path(sce_to_subclust_path, f))  # for myeloid; preserve sce structure with all markers
     
     # filter for only type markers for PCA & clustering
     # !!!!
     # CHECK THIS STEP IF DOING ANY MARKER SUBSET
     # !!!!
-    sce_tmp <- sce_tmp_0[rowData(sce_tmp_0)$marker_class == "type", ]
+    # sce_tmp <- sce_tmp_0[rowData(sce_tmp_0)$marker_class == "type", ]
+    
     
     # CHECK
     #   1. only 1 cluster number for meta6_full_lin
@@ -1935,10 +1939,12 @@ for (i in sel_panel_list[1]) {
     # PCA
     message(paste0(subclust_prefix, ": PCA"))
     
-    pc_prop <- 1
-    no_pcs <- floor(nrow(sce_tmp) * pc_prop) - 1
+    sel_markers <- type_markers(sce_tmp)
     
-    sce_tmp <- runPCA(sce_tmp, exprs_values = "exprs", ncomponents = no_pcs)
+    pc_prop <- 1
+    no_pcs <- floor(length(sel_markers) * pc_prop) - 1
+    
+    sce_tmp <- runPCA(sce_tmp, exprs_values = "exprs", ncomponents = no_pcs, subset_row = sel_markers)
     
     # elbow plot
     pca_matrix <- reducedDim(sce_tmp, "PCA")
@@ -1971,7 +1977,7 @@ for (i in sel_panel_list[1]) {
     # rds_dir <- file.path(res_dir, "RDS_Subcluster")
     # if (!dir.exists(rds_dir)) dir.create(rds_dir)
     
-    saveRDS(sce_tmp, file = file.path(rds_subclust_dir, paste0(subclust_prefix, "_sce_subclust_subset_lineage.rds")))
+    saveRDS(sce_tmp, file = file.path(rds_subclust_dir, paste0(subclust_prefix, "_sce_subclust_subset.rds")))
   
   }
 }
@@ -1984,7 +1990,7 @@ sel_panel_list <- c("TBNK", "Myeloid", "Cytokines")
 
 rds_path <- "D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS"
 
-sel_panel <- sel_panel_list[1]
+sel_panel <- sel_panel_list[2]
 
 res_dir <- file.path(rds_path, sel_panel, "Results_Subcluster")
 if (!dir.exists(res_dir)) dir.create(res_dir)
@@ -2015,19 +2021,16 @@ after_fsom_rds <- list.files(rds_subclust_dir)
 #   C6C7 = 4,
 #   C8 = 5
 # )
-pc_list <- list(
-  C1 = 7
-)
 
 # MYELOID NO EPCAM, FULL LINEAGE
 pc_list <- list(
   C1 = 9,
-  C2C3C4 = 6,
+  C2C3C4 = 8,
   C5 = 6,
-  C6 = 8
+  C6 = 6
 )
 
-for (i in sel_panel_list[1]) {
+for (i in sel_panel_list[2]) {
   
   sel_panel <- i
   
@@ -2109,7 +2112,6 @@ for (i in sel_panel_list[1]) {
     file_name <- paste0(subclust_prefix, "_Silhouette_Plot.png")
     ggsave(filename = file.path(res_dir, file_name), plot = sil_PLOT, width = 12, height = 8)
   }
-
 }
 
 
@@ -2146,21 +2148,21 @@ rowData(sce_main)$used_for_clustering[which(tmp_4type == TRUE)] <- TRUE
 
 # Cytokines - tier1 cluster sce
 # sce_c4 <- readRDS(file.path(rds_subclust_dir, "C4_sce_subclust_full_lineage.rds"))
-# sce_c5 <- readRDS(file.path(rds_subclust_dir, "C5_sce_subclust_full_lineage.rds"))
+sce_c5 <- readRDS(file.path(rds_subclust_dir, "C5_sce_subclust_full_lineage.rds"))
 # sce_c6 <- readRDS(file.path(rds_subclust_dir, "C6_sce_subclust_full_lineage.rds"))
-sce_myl <- readRDS(file.path(rds_subclust_dir, "Myeloid_sce_subclust_full_lineage.rds"))
+# sce_myl <- readRDS(file.path(rds_subclust_dir, "Myeloid_sce_subclust_full_lineage.rds"))
 
 # filter for selected cluster
-subclust <- c(1,2,3)  # tier1 cluster; adjust as needed; should match tier1 cluster sce
+subclust <- c(5)  # tier1 cluster; adjust as needed; should match tier1 cluster sce
 sce_main_tmp <- filterSCE(sce_main, meta6_full_lin %in% subclust)
 
 # sce_sub
-sce_sub <- sce_myl  # **** adjust as needed
+sce_sub <- sce_c5  # **** adjust as needed
 
 sce_main_tmp$cluster_id <- sce_sub$cluster_id
 sce_main_tmp@metadata <- metadata(sce_sub)
 
-sce_main_tmp$meta8 <- cluster_ids(sce_main_tmp, "meta8")  # **** adjust as needed
+sce_main_tmp$meta5 <- cluster_ids(sce_main_tmp, "meta5")  # **** adjust as needed
 
 # set PBMC as reference
 old_level <- levels(colData(sce_main_tmp)$tissue_type)
