@@ -26,7 +26,7 @@ colData(sce_main_c5)$tissue_type <- factor(colData(sce_main_c5)$tissue_type, lev
 
 sce_tmp <- filterSCE(sce_main_c5, meta5 == 3)
 
-# vector of batch levels in desired order
+# set batch levels in desired order
 # c("1_PBMC", "1_MPE", "2_PBMC", "2_MPE", etc.)
 batch_levels <- unlist(lapply(levels(sce_tmp$BATCH), function(b) c(paste0(b, "_PBMC"), paste0(b, "_MPE"))))
 
@@ -34,11 +34,6 @@ sce_tmp$BATCH_tissue <- factor(
   paste0(sce_tmp$BATCH, "_", sce_tmp$tissue_type),
   levels = batch_levels
 )
-
-# sce_main0_c5 <- filterSCE(sce_main0, meta6 == 5)
-# sce_main0_c5$meta5 <- cluster_ids(sce_c5, "meta5")
-# colData(sce_main0_c5)$tissue_type <- factor(colData(sce_main0_c5)$tissue_type, levels = c("PBMC", "MPE"))
-# sce_tmp <- filterSCE(sce_main0_c5, meta5 == 3)
 
 # ------------------------------------------------------------------------------
 
