@@ -2,46 +2,47 @@ sel_panel <- "TBNK"
 
 rds_subclust_dir <- paste0("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/", sel_panel, "/Results_Subcluster/RDS_Subcluster")
 
-rds_files <- list.files(rds_subclust_dir)
+rds_files <- list.files(rds_subclust_dir, pattern = "\\.rds")
 
-sce_c1 <- readRDS(file.path(rds_subclust_dir, rds_files[1]))
+# sce_c1 <- readRDS(file.path(rds_subclust_dir, rds_files[1]))
 # sce_c2 <- readRDS(file.path(rds_subclust_dir, rds_files[2]))
 # sce_c3c4 <- readRDS(file.path(rds_subclust_dir, rds_files[3]))
 # sce_c5c9 <- readRDS(file.path(rds_subclust_dir, rds_files[4]))
 sce_c6c7 <- readRDS(file.path(rds_subclust_dir, rds_files[5]))
 # sce_c8 <- readRDS(file.path(rds_subclust_dir, rds_files[6]))
 
-# subset lineage
-sce_main <- readRDS("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/TBNK/sce_subset_lineage.rds")
 
-# sce with all markers
-# 1. remove outliers from meta9 C1
-sce_main_c1 <- sce_main[, sce_main$meta9 == 1] # this has outliers; process below to remove outliers
-
-# identify outliers via UMAP
-umap_matrix <- reducedDim(sce_main_c1, "UMAP")
-tmp_sel <- umap_matrix[, 1] < (-10) | umap_matrix[, 2] > 10
-tmp_sel[is.na(tmp_sel)] <- FALSE
-
-# initialize column marking outliers
-colData(sce_main)$c1_outlier <- FALSE
-# assign outlier selection to only C1
-c1_idx <- which(sce_main$meta9 == 1)
-colData(sce_main)$c1_outlier[c1_idx] <- tmp_sel
-
-# view outliers
-colData(sce_main)[sce_main$c1_outlier == TRUE, ]
-# remove outliers
-sce_main <- sce_main[, sce_main$c1_outlier != TRUE]
-sce_main_c1_clean <- sce_main[, colData(sce_main)$meta9 == 1]
-
-
+# Preprocessing ----------------------------------------------------------------
+# # subset lineage
+# sce_main <- readRDS("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/TBNK/sce_subset_lineage.rds")
+# 
+# # sce with all markers
+# # 1. remove outliers from meta9 C1
+# sce_main_c1 <- sce_main[, sce_main$meta9 == 1] # this has outliers; process below to remove outliers
+# 
+# # identify outliers via UMAP
+# umap_matrix <- reducedDim(sce_main_c1, "UMAP")
+# tmp_sel <- umap_matrix[, 1] < (-10) | umap_matrix[, 2] > 10
+# tmp_sel[is.na(tmp_sel)] <- FALSE
+# 
+# # initialize column marking outliers
+# colData(sce_main)$c1_outlier <- FALSE
+# # assign outlier selection to only C1
+# c1_idx <- which(sce_main$meta9 == 1)
+# colData(sce_main)$c1_outlier[c1_idx] <- tmp_sel
+# 
+# # view outliers
+# colData(sce_main)[sce_main$c1_outlier == TRUE, ]
+# # remove outliers
+# sce_main <- sce_main[, sce_main$c1_outlier != TRUE]
+# sce_main_c1_clean <- sce_main[, colData(sce_main)$meta9 == 1]
+# ------------------------------------------------------------------------------
 
 
 rds_subclust_dir <- c("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/TBNK/Results_Subcluster/RDS_Subcluster")
 
 # load sce
-sce_main <- readRDS("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/TBNK/sce_main_0.rds") # all markers
+sce_main <- readRDS("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/TBNK/sce_main_with_outlier_column.rds") # all markers
 sce_sublin <- readRDS("D:/CHRISTOPHER_BUI/MPE_CYTOF_RDS/TBNK/sce_subset_lineage_no_outliers.rds") # subset lineage markers
 
 sce_main <- sce_main[, sce_main$c1_outlier != TRUE] # remove outliers
@@ -768,6 +769,13 @@ rownames(DS_FINAL) <- NULL
 file_name <- paste("TBNK_subclust_DS.txt")
 write.table(DS_FINAL, file.path(res_dir, file_name), sep = "\t", row.names = FALSE, quote = FALSE)
 
+
+# ------------------------------------------------------------------------------
+# Bind only fixed OPTION 1 model
+DS_FINAL <- bind_rows(C1_DS_1, C2_DS_1, C3C4_DS_1, C5C9_DS_1, C6C7_DS_1)
+rownames(DS_FINAL) <- NULL
+final_name <- paste("TBNK_subclust_tissue_fixed_DE_table.txt")
+write.table(DS_FINAL, file.path(res_dir, final_name), sep = "\t", row.names = FALSE, quote = FALSE)
 
 
 # ------------------------------------------------------------------------------
