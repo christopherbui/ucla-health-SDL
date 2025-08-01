@@ -24,10 +24,6 @@ echo " "
 module load spaceranger
 echo " "
 
-# echo job info on joblog:
-echo "Job $JOB_ID started on:   " `hostname -s`
-echo "Job $JOB_ID started on:   " `date `
-echo " "
 # --------------------------------------------------------------
 
 
