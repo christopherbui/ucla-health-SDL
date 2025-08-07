@@ -74,3 +74,153 @@ scheduling info:            (Collecting of scheduler job information is turned o
 
 ```
 
+
+
+`id`
+
+`myresources`
+
+`jobs`
+
+`qacct -j $jobID`
+
+- shows data for job
+
+
+
+## Requesting Resources
+
+```bash
+# start interactive session
+NUMcores=5; GBperCORE=4; TIME="04:00:00"; qrsh -pe shared "${NUMcores}" \
+-l i,h_rt="${TIME}",h_data="${GBperCORE}",h_vmem="$((NUMcores*GBperCORE))"G
+```
+
+
+
+## Multiple Jobs
+
+Each `qsub` submission specifies its resources.
+
+Use a wrapper script that dynamically:
+
+- calls `qsub` with specific resources
+- applies string manipulation to files & outputs
+
+*SCRIPT.sh* takes in 2 positional arguments.
+
+```bash
+#!/bin/bash
+TASKnCores="${1}"; inFQ="${2}"
+OUTbase="$(basename "${inFQ}")"
+OUTbase="${OUTbase%.fastq.gz}".BSBolt-GRCh38Ens114
+
+module load stuff
+
+# do stuff; ${1} & ${2} used here
+```
+
+
+
+```bash
+#!/bin/bash
+TASKnCores=2; TASKperCoreGB=7; TASKmaxTIME="1:00:00"
+for x in SRS*-head-part??.fastq.gz; do	# SRX101207se-head-part01.fastq.gz
+	SMPshrt="${x%%-*}"			# SRX101207se
+	SMPshrt="${SMPshrt#SRX}"	# 101207se
+	SMPshrt="${SMPshrt%se}"		# 101207
+	PARTnum="${x%.fastq.gz}"	# SRX101207se-head-part01
+	PARTnum="${PARTnum##*-part}"		# 01
+	JOBname="A${SMPshrt}_${PARTnum}"	# A101207_01
+	
+	qsub -cwd -r no -j no -m as -N "${JOBname}" -pe shared "${TASKnCores}" \
+	-l "h_rt=${TASKmaxTIME},h_data=${TASKperCoreGB}G,h_vmem=$((TASKnCores*TASKperCOREGB))G" \
+	SCRIPT.sh "${TASKnCores}" "${x}"
+done
+```
+
+
+
+## Estimate Resource Usage
+
+C
+
+## Other Shell
+
+`awk`
+
+`pv`
+
+`cut`
+
+`gzip -c -d`
+
+`paste - - - -`
+
+
+
+# Test Job Submission
+
+`qacct -j 10110504`
+
+```bash
+[cbui@login3 pbmc_1k_v3_fastqs]$ qacct -j 10110504
+==============================================================
+qname        pod_smp.q
+hostname     n1064
+group        sdubinet
+owner        cbui
+project      sdubinet_prj
+department   defaultdepartment
+jobname      submit_cellranger_cluster_LF.sh
+jobnumber    10110504
+taskid       undefined
+pe_taskid    NONE
+account      sge
+priority     0
+cwd          /u/scratch/c/cbui/cellranger_tutorial/script
+submit_host  login3
+submit_cmd   qsub submit_cellranger_cluster_LF.sh
+qsub_time    08/07/2025 13:20:43.535
+start_time   08/07/2025 13:24:51.439
+end_time     08/07/2025 14:59:18.705
+granted_pe   shared
+slots        4
+failed       0
+deleted_by   NONE
+exit_status  0
+ru_wallclock 5667.266
+ru_utime     10132.795
+ru_stime     838.089
+ru_maxrss    15698988
+ru_ixrss     0
+ru_ismrss    0
+ru_idrss     0
+ru_isrss     0
+ru_minflt    328648496
+ru_majflt    1269
+ru_nswap     0
+ru_inblock   97338880
+ru_oublock   52296368
+ru_msgsnd    0
+ru_msgrcv    0
+ru_nsignals  0
+ru_nvcsw     40042567
+ru_nivcsw    58901189
+wallclock    5667.561
+cpu          10970.884
+mem          131510.327
+io           416.474
+iow          99.270
+ioops        145029429
+maxvmem      17.697G
+maxrss       0.000
+maxpss       0.000
+arid         undefined
+jc_name      NONE
+bound_cores  NONE
+
+```
+
+
+

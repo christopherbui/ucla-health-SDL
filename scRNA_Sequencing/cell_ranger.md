@@ -172,3 +172,37 @@ echo " "
 | Multiome              | GEX + ATAC from same cell       | Nuclei          |
 
 **Multiplex:** Putting libraries from multiple samples into the same flow cell for sequencing. Use cell barcode to demultiplex (group libraries into correct sample) for consistent analysis.
+
+
+
+# Space Ranger
+
+Similar to cell ranger, but uses spatial barcode to label which cell (& therefore position on image) that a specific column's gene expression is associated with.
+
+| **Gene**   | AAAGATGGTCCGAAAG | AAAGATGGTGAGTGAC | AAAGCAATCACCTTAC |
+| ---------- | ---------------- | ---------------- | ---------------- |
+| **MALAT1** | 34               | 21               | 11               |
+| **GAPDH**  | 102              | 87               | 96               |
+| **ACTB**   | 56               | 49               | 60               |
+| **COL1A1** | 8                | 0                | 2                |
+| **FN1**    | 0                | 1                | 0                |
+| **MYH11**  | 0                | 0                | 6                |
+
+
+
+There is a separate `tissue_positions_list.csv` that provides details for each spatial barcode.
+
+| **Barcode**      | **In_tissue** | **Array_row** | **Array_col** | **Pixel_row** | **Pixel_col** |
+| ---------------- | ------------- | ------------- | ------------- | ------------- | ------------- |
+| AAAGATGGTCCGAAAG | 1             | 35            | 43            | 3357          | 2894          |
+| AAAGATGGTGAGTGAC | 1             | 36            | 43            | 3412          | 2890          |
+| AAAGCAATCACCTTAC | 0             | 45            | 52            | 4022          | 3480          |
+
+Details:
+
+| Column            | Description                                         |
+| ----------------- | --------------------------------------------------- |
+| **Barcode**       | Spot barcode (matches columns in expression matrix) |
+| **In_tissue**     | `1` = spot overlaps tissue; `0` = background        |
+| **Array_row/col** | Grid layout of the spot on the slide                |
+| **Pixel_row/col** | Spot's position on the full-resolution tissue image |
