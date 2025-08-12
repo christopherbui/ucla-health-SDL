@@ -28,7 +28,7 @@ cellranger count \
     --jobmode=$JOBMODE \
     --jobinterval=10000 \
     --localcores=4 \
-    --localmem=16
+    --localmem=32
 
 
 ################################################################
