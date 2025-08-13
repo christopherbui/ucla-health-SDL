@@ -1,6 +1,11 @@
 #!/bin/bash
 
-myinput="/u/scratch/c/cbui/cellranger_tutorial/script/cr_input2.txt"
+# change as necessary
+myinput="/u/scratch/c/cbui/cellranger_tutorial/script/myinput.txt"
+
+# change as necessary
+results_dir="/u/scratch/c/cbui/cellranger_tutorial/results"
+mkdir -p "$results_dir"
 
 
 ###################################################################
@@ -40,37 +45,35 @@ if (( total_lines %2 != 0 )); then
     exit 1
 fi
 
-for (( i=1; i <= total_lines; i+=2 )); do
-    caseID=$(sed -n "${i}p" "${myinput}")
-    fastqPath=$(sed -n "$((i+1))p" "${myinput}")
-    fastqName="${fastqPath##*/}"  ##remove longest before (#) /
-    sampID="${fastqName%%_fastqs}"  ##remove longest after (%) _fastqs
-    out_dir="${caseID}"_"${sampID}"
+while read caseID && read fastqPath; do
+    fastqName="${fastqPath##*/}"
+    sampID="${fastqName%%_*}"
+    outDir="${caseID}"_"${sampID}"
 
     # check if fastq directory exists
     if [[ ! -d "$fastqPath" ]]; then
         echo "ERROR: FASTQ Directory Not Found..."
         echo "$fastqPath"
+        exit 1
     fi
 
-    echo "Lines ${i} & $((i+1)):"
     echo "caseID: $caseID"
     echo "fastqPath: $fastqPath"
     echo "fastqName: $fastqName"
     echo "sampID: $sampID"
-    echo "out_dir: $out_dir"
-    echo ""
+    echo "outDir: $outDir"
+
 
     # submit qsub cellranger job
-    # qsub \
-    #     -cwd \
-    #     -o "/u/scratch/c/cbui/cellranger_tutorial/job-logs" \
-    #     -j y \
-    #     -l h_rt=24:00:00,h_data=8G \
-    #     -pe shared 8 \
-    #     -N ${caseID}_${sampID} \
-    #     -M $USER@mail \
-    #     -m bea \
-    #     -v caseID=$caseID,fastqPath=$fastqPath,sampID=$sampID \
-    #     run_cellranger.sh
-done
+    qsub \
+        -wd "$results_dir" \
+        -o "/u/scratch/c/cbui/cellranger_tutorial/job-logs" \
+        -j y \
+        -l h_rt=24:00:00,h_data=8G \
+        -pe shared 8 \
+        -M $USER@mail \
+        -m bea \
+        -v caseID="$caseID",fastqPath="$fastqPath" \
+        run_cellranger.sh
+
+done < "$myinput"

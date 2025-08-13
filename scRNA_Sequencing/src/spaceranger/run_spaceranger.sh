@@ -6,15 +6,22 @@ module load spaceranger/3.1.1
 
 . /u/local/etc/profile.d/sge.sh
 
-ref_dir="/u/scratch/c/cbui/spaceranger_tutorial/refdata-gex-mm10-2020-A"
-img_dir="/u/scratch/c/cbui/spaceranger_tutorial/datasets/Visium_FFPE_Mouse_Brain_image.jpg"
+ref_dir="/u/scratch/c/cbui/spaceranger_tutorial/all_refs/refdata-gex-mm10-2020-A"
 
-out_dir="${caseID}"_"${sampID}"
+fastqName="${fastqPath##*/}"
+sampID="${fastqName%%_*}"
+outDir="${caseID}"_"${sampID}"
 
 # no include-introns available
 spaceranger count \
-    --id=$out_dir \                                
-    --transcriptome=$ref_dir \
+    --id="$outDir" \
+    --transcriptome="$ref_dir" \
+    --probe-set="$csvPath" \
+    --fastqs="$fastqPath" \
+    --image="$imgPath" \
+    --slide="V11J26-127" \
+    --area="B1" \
     --create-bam=true \
-    --image=$img_dir \
-    --disable-ui
+    --reorient-images=true \
+    --disable-ui \
+    --jobmode=sge --maxjobs=60 --jobinterval=10000
