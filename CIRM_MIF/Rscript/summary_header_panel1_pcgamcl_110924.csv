@@ -1,0 +1,194 @@
+﻿summary_header_panel1,isKept
+Image Location,1
+Image Tag,1
+Algorithm Name,1
+Start Time,0
+Job Id,1
+Analysis Region,1
+Analysis Inputs,0
+Classified Area (mm²),1
+Glass Area (mm²),1
+Tissue Area (mm²),1
+Total Cells,1
+Opal 480 Positive Cells,1
+Opal 520 Positive Cells,1
+Opal 570 Positive Cells,1
+Opal 620 Positive Cells,1
+Opal 690 Positive Cells,1
+Opal 780 Positive Cells,1
+Negative Cells,1
+Opal 480 Positive Nuclei,1
+Opal 520 Positive Nuclei,1
+Opal 570 Positive Nuclei,1
+Opal 620 Positive Nuclei,1
+Opal 690 Positive Nuclei,1
+Opal 780 Positive Nuclei,1
+Negative Nuclei,1
+CD3 Cells,0
+CD3 PD1 Cells,0
+CD8 Cells,0
+CD8 PD1 Cells,0
+CD68 Cells,0
+CD68 PDL1 Cells,0
+Tumor Cells,0
+Tumor PDL1 Cells,0
+% Opal 480 Positive Cells,1
+% Opal 520 Positive Cells,1
+% Opal 570 Positive Cells,1
+% Opal 620 Positive Cells,1
+% Opal 690 Positive Cells,1
+% Opal 780 Positive Cells,1
+% Opal 480 Positive Nuclei,1
+% Opal 520 Positive Nuclei,1
+% Opal 570 Positive Nuclei,1
+% Opal 620 Positive Nuclei,1
+% Opal 690 Positive Nuclei,1
+% Opal 780 Positive Nuclei,1
+% CD3 Positive Cells,0
+% CD3 PD1 Positive Cells,0
+% CD8 Positive Cells,0
+% CD8 PD1 Positive Cells,0
+% CD68 Positive Cells,0
+% CD68 PDL1 Positive Cells,0
+% Tumor Positive Cells,0
+% Tumor PDL1 Positive Cells,0
+Opal 480 Avg Positive Nuclei Intensity,1
+Opal 520 Avg Positive Nuclei Intensity,1
+Opal 570 Avg Positive Nuclei Intensity,1
+Opal 620 Avg Positive Nuclei Intensity,1
+Opal 690 Avg Positive Nuclei Intensity,1
+Opal 780 Avg Positive Nuclei Intensity,1
+Opal 480 Avg Cell Intensity,1
+Opal 520 Avg Cell Intensity,1
+Opal 570 Avg Cell Intensity,1
+Opal 620 Avg Cell Intensity,1
+Opal 690 Avg Cell Intensity,1
+Opal 780 Avg Cell Intensity,1
+DAPI Avg Cell Intensity,1
+Avg Cell Area (μm²),1
+Avg Nucleus Area (μm²),1
+Avg Nucleus Perimeter (μm),1
+Avg Nucleus Roundness,1
+Area Analyzed (μm²),1
+Glass: Total Cells,1
+Glass: Opal 480 Positive Cells,1
+Glass: Opal 520 Positive Cells,1
+Glass: Opal 570 Positive Cells,1
+Glass: Opal 620 Positive Cells,1
+Glass: Opal 690 Positive Cells,1
+Glass: Opal 780 Positive Cells,1
+Glass: Negative Cells,1
+Glass: Opal 480 Positive Nuclei,1
+Glass: Opal 520 Positive Nuclei,1
+Glass: Opal 570 Positive Nuclei,1
+Glass: Opal 620 Positive Nuclei,1
+Glass: Opal 690 Positive Nuclei,1
+Glass: Opal 780 Positive Nuclei,1
+Glass: Negative Nuclei,1
+Glass: CD3 Cells,0
+Glass: CD3 PD1 Cells,0
+Glass: CD8 Cells,0
+Glass: CD8 PD1 Cells,0
+Glass: CD68 Cells,0
+Glass: CD68 PDL1 Cells,0
+Glass: Tumor Cells,0
+Glass: Tumor PDL1 Cells,0
+Glass: % Opal 480 Positive Cells,1
+Glass: % Opal 520 Positive Cells,1
+Glass: % Opal 570 Positive Cells,1
+Glass: % Opal 620 Positive Cells,1
+Glass: % Opal 690 Positive Cells,1
+Glass: % Opal 780 Positive Cells,1
+Glass: % Opal 480 Positive Nuclei,1
+Glass: % Opal 520 Positive Nuclei,1
+Glass: % Opal 570 Positive Nuclei,1
+Glass: % Opal 620 Positive Nuclei,1
+Glass: % Opal 690 Positive Nuclei,1
+Glass: % Opal 780 Positive Nuclei,1
+Glass: % CD3 Positive Cells,0
+Glass: % CD3 PD1 Positive Cells,0
+Glass: % CD8 Positive Cells,0
+Glass: % CD8 PD1 Positive Cells,0
+Glass: % CD68 Positive Cells,0
+Glass: % CD68 PDL1 Positive Cells,0
+Glass: % Tumor Positive Cells,0
+Glass: % Tumor PDL1 Positive Cells,0
+Glass: Opal 480 Avg Positive Nuclei Intensity,1
+Glass: Opal 520 Avg Positive Nuclei Intensity,1
+Glass: Opal 570 Avg Positive Nuclei Intensity,1
+Glass: Opal 620 Avg Positive Nuclei Intensity,1
+Glass: Opal 690 Avg Positive Nuclei Intensity,1
+Glass: Opal 780 Avg Positive Nuclei Intensity,1
+Glass: Opal 480 Avg Cell Intensity,1
+Glass: Opal 520 Avg Cell Intensity,1
+Glass: Opal 570 Avg Cell Intensity,1
+Glass: Opal 620 Avg Cell Intensity,1
+Glass: Opal 690 Avg Cell Intensity,1
+Glass: Opal 780 Avg Cell Intensity,1
+Glass: DAPI Avg Cell Intensity,1
+Glass: Avg Cell Area (μm²),1
+Glass: Avg Nucleus Area (μm²),1
+Glass: Avg Nucleus Perimeter (μm),1
+Glass: Avg Nucleus Roundness,1
+Glass: Area Analyzed (μm²),1
+Tissue: Total Cells,1
+Tissue: Opal 480 Positive Cells,1
+Tissue: Opal 520 Positive Cells,1
+Tissue: Opal 570 Positive Cells,1
+Tissue: Opal 620 Positive Cells,1
+Tissue: Opal 690 Positive Cells,1
+Tissue: Opal 780 Positive Cells,1
+Tissue: Negative Cells,1
+Tissue: Opal 480 Positive Nuclei,1
+Tissue: Opal 520 Positive Nuclei,1
+Tissue: Opal 570 Positive Nuclei,1
+Tissue: Opal 620 Positive Nuclei,1
+Tissue: Opal 690 Positive Nuclei,1
+Tissue: Opal 780 Positive Nuclei,1
+Tissue: Negative Nuclei,1
+Tissue: CD3 Cells,0
+Tissue: CD3 PD1 Cells,0
+Tissue: CD8 Cells,0
+Tissue: CD8 PD1 Cells,0
+Tissue: CD68 Cells,0
+Tissue: CD68 PDL1 Cells,0
+Tissue: Tumor Cells,0
+Tissue: Tumor PDL1 Cells,0
+Tissue: % Opal 480 Positive Cells,1
+Tissue: % Opal 520 Positive Cells,1
+Tissue: % Opal 570 Positive Cells,1
+Tissue: % Opal 620 Positive Cells,1
+Tissue: % Opal 690 Positive Cells,1
+Tissue: % Opal 780 Positive Cells,1
+Tissue: % Opal 480 Positive Nuclei,1
+Tissue: % Opal 520 Positive Nuclei,1
+Tissue: % Opal 570 Positive Nuclei,1
+Tissue: % Opal 620 Positive Nuclei,1
+Tissue: % Opal 690 Positive Nuclei,1
+Tissue: % Opal 780 Positive Nuclei,1
+Tissue: % CD3 Positive Cells,0
+Tissue: % CD3 PD1 Positive Cells,0
+Tissue: % CD8 Positive Cells,0
+Tissue: % CD8 PD1 Positive Cells,0
+Tissue: % CD68 Positive Cells,0
+Tissue: % CD68 PDL1 Positive Cells,0
+Tissue: % Tumor Positive Cells,0
+Tissue: % Tumor PDL1 Positive Cells,0
+Tissue: Opal 480 Avg Positive Nuclei Intensity,1
+Tissue: Opal 520 Avg Positive Nuclei Intensity,1
+Tissue: Opal 570 Avg Positive Nuclei Intensity,1
+Tissue: Opal 620 Avg Positive Nuclei Intensity,1
+Tissue: Opal 690 Avg Positive Nuclei Intensity,1
+Tissue: Opal 780 Avg Positive Nuclei Intensity,1
+Tissue: Opal 480 Avg Cell Intensity,1
+Tissue: Opal 520 Avg Cell Intensity,1
+Tissue: Opal 570 Avg Cell Intensity,1
+Tissue: Opal 620 Avg Cell Intensity,1
+Tissue: Opal 690 Avg Cell Intensity,1
+Tissue: Opal 780 Avg Cell Intensity,1
+Tissue: DAPI Avg Cell Intensity,1
+Tissue: Avg Cell Area (μm²),1
+Tissue: Avg Nucleus Area (μm²),1
+Tissue: Avg Nucleus Perimeter (μm),1
+Tissue: Avg Nucleus Roundness,1
+Tissue: Area Analyzed (μm²),1

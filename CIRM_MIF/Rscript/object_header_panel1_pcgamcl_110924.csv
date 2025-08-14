@@ -1,0 +1,47 @@
+﻿pcga,isKept
+Image Location,1
+Analysis Region,1
+Algorithm Name,1
+Object Id,1
+XMin,1
+XMax,1
+YMin,1
+YMax,1
+CD3,0
+CD3 PD1,0
+CD8,0
+CD8 PD1,0
+CD68,0
+CD68 PDL1,0
+Tumor,0
+Tumor PDL1,0
+Opal 480 Positive Classification,1
+Opal 480 Positive Nucleus Classification,1
+Opal 480 Nucleus Intensity,1
+Opal 480 Cell Intensity,1
+Opal 520 Positive Classification,1
+Opal 520 Positive Nucleus Classification,1
+Opal 520 Nucleus Intensity,1
+Opal 520 Cell Intensity,1
+Opal 570 Positive Classification,1
+Opal 570 Positive Nucleus Classification,1
+Opal 570 Nucleus Intensity,1
+Opal 570 Cell Intensity,1
+Opal 620 Positive Classification,1
+Opal 620 Positive Nucleus Classification,1
+Opal 620 Nucleus Intensity,1
+Opal 620 Cell Intensity,1
+Opal 690 Positive Classification,1
+Opal 690 Positive Nucleus Classification,1
+Opal 690 Nucleus Intensity,1
+Opal 690 Cell Intensity,1
+Opal 780 Positive Classification,1
+Opal 780 Positive Nucleus Classification,1
+Opal 780 Nucleus Intensity,1
+Opal 780 Cell Intensity,1
+DAPI Cell Intensity,1
+Cell Area (µm²),1
+Nucleus Area (µm²),1
+Nucleus Perimeter (µm),1
+Nucleus Roundness,1
+Classifier Label,1
